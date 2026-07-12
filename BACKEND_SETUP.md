@@ -64,6 +64,12 @@ Frontend Vercel env:
 
 - `VITE_API_BASE_URL=https://YOUR_CLOUD_RUN_URL/api`
 
+Backend `PUBLIC_SITE_URL` must point to the active public frontend domain because Stripe uses it for Checkout success and cancel redirects. While the custom domain is not live, use:
+
+```text
+https://curtis-inn-direct.vercel.app
+```
+
 Production `ALLOWED_ORIGINS` must include every public frontend origin that will call the backend from a browser, for example:
 
 ```text
