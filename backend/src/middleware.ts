@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import multer from 'multer';
+import { ZodError } from 'zod';
 import { config } from './config.js';
 import { AppError, forbidden, unauthorized } from './errors.js';
 import { pool } from './db.js';
@@ -28,6 +29,18 @@ export const asyncHandler =
   };
 
 export function errorHandler(error: unknown, _req: Request, res: Response, _next: NextFunction) {
+  if (error instanceof ZodError) {
+    const firstIssue = error.issues[0];
+    const path = firstIssue?.path?.length ? `${firstIssue.path.join('.')}: ` : '';
+    return res.status(400).json({
+      error: {
+        code: 'validation_error',
+        message: firstIssue ? `${path}${firstIssue.message}` : 'Invalid request.',
+        details: error.flatten(),
+      },
+    });
+  }
+
   if (error instanceof multer.MulterError) {
     const isSizeError = error.code === 'LIMIT_FILE_SIZE';
     return res.status(400).json({

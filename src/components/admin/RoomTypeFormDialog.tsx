@@ -7,6 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, ArrowRight, Star, Trash2, Upload } from 'lucide-react';
+import { uploadContentImage } from '@/services/api';
 
 export interface RoomFormValues {
   name: string;
@@ -35,11 +36,14 @@ interface Props {
 }
 
 const MAX_IMAGES = 8;
-const MAX_BYTES = 2 * 1024 * 1024;
+const MAX_BYTES = 5 * 1024 * 1024;
+const MAX_SOURCE_BYTES = 25 * 1024 * 1024;
+const MAX_IMAGE_DIMENSION = 1800;
 const ACCEPT = ['image/jpeg', 'image/png', 'image/webp'];
 
 export function RoomTypeFormDialog({ open, mode, initial, onClose, onSubmit }: Props) {
   const { toast } = useToast();
+  const [uploading, setUploading] = useState(false);
   const [v, setV] = useState<RoomFormValues>({
     name: '', shortDescription: '', longDescription: '',
     occupancy: 2, bedType: 'Queen', basePrice: 0, baseInventory: 0, isActive: true, images: [],
@@ -64,7 +68,7 @@ export function RoomTypeFormDialog({ open, mode, initial, onClose, onSubmit }: P
     }
   }, [open, initial]);
 
-  const handleFiles = (files: FileList | null) => {
+  const handleFiles = async (files: FileList | null) => {
     if (!files) return;
     const room = MAX_IMAGES - v.images.length;
     if (room <= 0) {
@@ -72,26 +76,58 @@ export function RoomTypeFormDialog({ open, mode, initial, onClose, onSubmit }: P
       return;
     }
     const pick = Array.from(files).slice(0, room);
-    let done = 0;
     const collected: string[] = [];
-    pick.forEach(file => {
-      if (!ACCEPT.includes(file.type)) {
-        toast({ title: 'Unsupported file', description: `${file.name} is not JPG/PNG/WebP.`, variant: 'destructive' });
-        done++; return;
+    setUploading(true);
+    try {
+      for (const file of pick) {
+        if (!ACCEPT.includes(file.type)) {
+          toast({ title: 'Unsupported file', description: `${file.name} is not JPG/PNG/WebP.`, variant: 'destructive' });
+          continue;
+        }
+        if (file.size > MAX_SOURCE_BYTES) {
+          toast({ title: 'File too large', description: `${file.name} is too large to process. Please choose an image under 25 MB.`, variant: 'destructive' });
+          continue;
+        }
+
+        let uploadFile: File;
+        try {
+          uploadFile = await prepareRoomImage(file);
+        } catch (error) {
+          toast({
+            title: 'Image could not be processed',
+            description: error instanceof Error ? `${file.name}: ${error.message}` : `${file.name} could not be processed.`,
+            variant: 'destructive',
+          });
+          continue;
+        }
+
+        if (uploadFile.size > MAX_BYTES) {
+          toast({ title: 'File too large', description: `${file.name} could not be optimized under 5 MB. Please choose a smaller image.`, variant: 'destructive' });
+          continue;
+        }
+
+        try {
+          const uploaded = await uploadContentImage(uploadFile);
+          collected.push(uploaded.url);
+        } catch (error) {
+          toast({
+            title: 'Upload failed',
+            description: error instanceof Error ? `${file.name}: ${error.message}` : `${file.name} could not be uploaded.`,
+            variant: 'destructive',
+          });
+        }
       }
-      if (file.size > MAX_BYTES) {
-        toast({ title: 'File too large', description: `${file.name} exceeds 2 MB.`, variant: 'destructive' });
-        done++; return;
+
+      if (collected.length) {
+        setV(s => ({ ...s, images: [...s.images, ...collected].slice(0, MAX_IMAGES) }));
+        toast({
+          title: collected.length === 1 ? 'Photo uploaded' : 'Photos uploaded',
+          description: `${collected.length} room photo${collected.length === 1 ? '' : 's'} ready to save.`,
+        });
       }
-      const reader = new FileReader();
-      reader.onload = () => {
-        collected.push(reader.result as string);
-        done++;
-        if (done === pick.length) setV(s => ({ ...s, images: [...s.images, ...collected] }));
-      };
-      reader.onerror = () => { done++; };
-      reader.readAsDataURL(file);
-    });
+    } finally {
+      setUploading(false);
+    }
   };
 
   const move = (i: number, dir: -1 | 1) => {
@@ -110,11 +146,11 @@ export function RoomTypeFormDialog({ open, mode, initial, onClose, onSubmit }: P
   };
   const remove = (i: number) => setV(s => ({ ...s, images: s.images.filter((_, k) => k !== i) }));
 
-  const canSave = v.name.trim().length > 0 && v.basePrice >= 0 && v.baseInventory >= 0;
+  const canSave = v.name.trim().length > 0 && v.basePrice >= 0 && v.baseInventory >= 0 && !uploading;
 
   const save = () => {
     if (!canSave) {
-      toast({ title: 'Missing fields', description: 'Name is required.', variant: 'destructive' });
+      toast({ title: uploading ? 'Upload in progress' : 'Missing fields', description: uploading ? 'Please wait for room photos to finish uploading.' : 'Name is required.', variant: 'destructive' });
       return;
     }
     onSubmit({ ...v, name: v.name.trim() });
@@ -177,9 +213,9 @@ export function RoomTypeFormDialog({ open, mode, initial, onClose, onSubmit }: P
           <div>
             <div className="flex items-center justify-between mb-2">
               <Label className="text-xs">Photos ({v.images.length}/{MAX_IMAGES})</Label>
-              <label className="inline-flex items-center gap-1 text-xs text-primary cursor-pointer">
-                <Upload className="h-3.5 w-3.5" /> Upload
-                <input type="file" accept={ACCEPT.join(',')} multiple className="hidden" onChange={(e) => { handleFiles(e.target.files); e.target.value = ''; }} />
+              <label className={`inline-flex items-center gap-1 text-xs text-primary ${uploading ? 'pointer-events-none opacity-60' : 'cursor-pointer'}`}>
+                <Upload className="h-3.5 w-3.5" /> {uploading ? 'Uploading...' : 'Upload'}
+                <input type="file" accept={ACCEPT.join(',')} multiple disabled={uploading} className="hidden" onChange={(e) => { void handleFiles(e.target.files); e.target.value = ''; }} />
               </label>
             </div>
             {v.images.length === 0 ? (
@@ -206,15 +242,55 @@ export function RoomTypeFormDialog({ open, mode, initial, onClose, onSubmit }: P
                 ))}
               </div>
             )}
-            <p className="text-[11px] text-muted-foreground mt-2">JPG/PNG/WebP, max 2 MB each. Hover a photo to reorder, set as cover, or remove.</p>
+            <p className="text-[11px] text-muted-foreground mt-2">JPG/PNG/WebP, optimized for web, max 5 MB each after optimization. Hover a photo to reorder, set as cover, or remove.</p>
           </div>
         </div>
 
         <DialogFooter>
-          <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button onClick={save} disabled={!canSave}>{mode === 'add' ? 'Add room type' : 'Save changes'}</Button>
+          <Button variant="ghost" onClick={onClose} disabled={uploading}>Cancel</Button>
+          <Button onClick={save} disabled={!canSave}>{uploading ? 'Uploading photos...' : mode === 'add' ? 'Add room type' : 'Save changes'}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
+}
+
+async function prepareRoomImage(file: File): Promise<File> {
+  if (file.size <= MAX_BYTES && file.type === 'image/webp') return file;
+
+  const bitmap = await createImageBitmap(file);
+  try {
+    const scale = Math.min(1, MAX_IMAGE_DIMENSION / Math.max(bitmap.width, bitmap.height));
+    const width = Math.max(1, Math.round(bitmap.width * scale));
+    const height = Math.max(1, Math.round(bitmap.height * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext('2d');
+    if (!context) return file;
+    context.drawImage(bitmap, 0, 0, width, height);
+
+    for (const quality of [0.86, 0.76, 0.66]) {
+      const blob = await canvasToBlob(canvas, 'image/webp', quality);
+      if (blob.size <= MAX_BYTES) return new File([blob], replaceExtension(file.name, 'webp'), { type: 'image/webp' });
+    }
+
+    const fallbackBlob = await canvasToBlob(canvas, 'image/webp', 0.58);
+    return new File([fallbackBlob], replaceExtension(file.name, 'webp'), { type: 'image/webp' });
+  } finally {
+    bitmap.close();
+  }
+}
+
+function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality: number): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(blob => {
+      if (blob) resolve(blob);
+      else reject(new Error('Image could not be processed.'));
+    }, type, quality);
+  });
+}
+
+function replaceExtension(name: string, ext: string) {
+  return name.replace(/\.[^.]+$/, '') + `.${ext}`;
 }
