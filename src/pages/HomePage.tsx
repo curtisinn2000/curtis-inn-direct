@@ -263,7 +263,13 @@ export default function HomePage() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {featuredAttractions.map(attraction => (
-              <Card key={attraction.id} className="p-6 hover:shadow-md transition-shadow">
+              <Card key={attraction.id} className="overflow-hidden hover:shadow-md transition-shadow">
+                {attraction.image && (
+                  <div className="aspect-[16/9] bg-muted">
+                    <img src={resolveContentImage(attraction.image, fallbackContentImages.beach)} alt={attraction.name} className="h-full w-full object-cover" loading="lazy" />
+                  </div>
+                )}
+                <div className="p-6">
                 <div className="flex items-start gap-3 mb-3">
                   <MapPin className="h-5 w-5 text-accent shrink-0 mt-0.5" />
                   <div>
@@ -272,6 +278,7 @@ export default function HomePage() {
                   </div>
                 </div>
                 <p className="text-caption text-sm">{attraction.description}</p>
+                </div>
               </Card>
             ))}
             {featuredAttractions.length === 0 && (

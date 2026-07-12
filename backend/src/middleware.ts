@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
+import multer from 'multer';
 import { config } from './config.js';
 import { AppError, forbidden, unauthorized } from './errors.js';
 import { pool } from './db.js';
@@ -27,6 +28,16 @@ export const asyncHandler =
   };
 
 export function errorHandler(error: unknown, _req: Request, res: Response, _next: NextFunction) {
+  if (error instanceof multer.MulterError) {
+    const isSizeError = error.code === 'LIMIT_FILE_SIZE';
+    return res.status(400).json({
+      error: {
+        code: isSizeError ? 'file_too_large' : 'upload_error',
+        message: isSizeError ? 'Images must be 5 MB or smaller.' : error.message,
+      },
+    });
+  }
+
   if (error instanceof AppError) {
     return res.status(error.status).json({
       error: {

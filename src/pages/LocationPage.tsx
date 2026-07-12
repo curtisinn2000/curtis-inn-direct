@@ -5,6 +5,7 @@ import type { NearbyAttraction } from '@/types';
 import { Loader2, MapPin } from 'lucide-react';
 import beachImg from '@/assets/beach.jpg';
 import { useEffect, useState } from 'react';
+import { fallbackContentImages, resolveContentImage } from '@/lib/contentImages';
 
 export default function LocationPage() {
   const [attractions, setAttractions] = useState<NearbyAttraction[]>([]);
@@ -69,12 +70,19 @@ export default function LocationPage() {
             )}
             {!loading && error && <Card className="p-8 text-center text-sm text-destructive md:col-span-2">{error}</Card>}
             {!loading && !error && attractions.map(attraction => (
-              <Card key={attraction.id} className="p-5 flex items-start gap-4">
-                <MapPin className="h-5 w-5 text-accent shrink-0 mt-0.5" />
-                <div>
-                  <h3 className="font-semibold text-sm">{attraction.name}</h3>
-                  <p className="text-xs text-accent font-medium mb-1">{attraction.distance}</p>
-                  <p className="text-sm text-muted-foreground">{attraction.description}</p>
+              <Card key={attraction.id} className="overflow-hidden">
+                {attraction.image && (
+                  <div className="aspect-[16/9] bg-muted">
+                    <img src={resolveContentImage(attraction.image, fallbackContentImages.beach)} alt={attraction.name} className="h-full w-full object-cover" loading="lazy" />
+                  </div>
+                )}
+                <div className="p-5 flex items-start gap-4">
+                  <MapPin className="h-5 w-5 text-accent shrink-0 mt-0.5" />
+                  <div>
+                    <h3 className="font-semibold text-sm">{attraction.name}</h3>
+                    <p className="text-xs text-accent font-medium mb-1">{attraction.distance}</p>
+                    <p className="text-sm text-muted-foreground">{attraction.description}</p>
+                  </div>
                 </div>
               </Card>
             ))}

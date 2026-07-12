@@ -21,6 +21,7 @@ const envSchema = z.object({
   GMAIL_SMTP_USER: z.string().optional().default(''),
   GMAIL_SMTP_PASS: z.string().optional().default(''),
   MAIL_FROM: z.string().optional().default('curtisinn200@gmail.com'),
+  GCS_CONTENT_BUCKET: z.string().optional().default(''),
 });
 
 export const config = envSchema.parse(process.env);

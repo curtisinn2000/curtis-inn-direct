@@ -26,9 +26,10 @@ import {
   deleteReview,
   getAdminWebsiteContent,
   updateHeroContent,
+  uploadContentImage,
 } from '@/services/api';
 import { resolveContentImage } from '@/lib/contentImages';
-import { GripVertical, Loader2, Plus, Star, Trash2 } from 'lucide-react';
+import { GripVertical, ImageIcon, Loader2, Plus, Star, Trash2, Upload } from 'lucide-react';
 
 const emptyContent: WebsiteContent = {
   hero: {
@@ -43,6 +44,8 @@ const emptyContent: WebsiteContent = {
 };
 
 const todayKey = () => new Date().toISOString().slice(0, 10);
+const allowedImageTypes = ['image/jpeg', 'image/png', 'image/webp'];
+const maxImageBytes = 5 * 1024 * 1024;
 
 export default function AdminContentPage() {
   const { toast } = useToast();
@@ -51,6 +54,10 @@ export default function AdminContentPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [dialog, setDialog] = useState<'faq' | 'gallery' | 'review' | 'attraction' | null>(null);
+  const [galleryFile, setGalleryFile] = useState<File | null>(null);
+  const [galleryPreview, setGalleryPreview] = useState('');
+  const [attractionFile, setAttractionFile] = useState<File | null>(null);
+  const [attractionPreview, setAttractionPreview] = useState('');
   const [faqForm, setFaqForm] = useState<Omit<FAQ, 'id'>>({ question: '', answer: '', category: 'General', sortOrder: 0 });
   const [galleryForm, setGalleryForm] = useState<Omit<GalleryImage, 'id'>>({ url: '', alt: '', category: 'exterior', sortOrder: 0 });
   const [reviewForm, setReviewForm] = useState<Omit<Review, 'id'>>({
@@ -128,10 +135,16 @@ export default function AdminContentPage() {
 
   async function submitGallery(event: FormEvent) {
     event.preventDefault();
+    if (!galleryFile) {
+      showError('Gallery image was not added', new Error('Please choose an image to upload.'));
+      return;
+    }
     setSaving(true);
     try {
-      await createGalleryImage({ ...galleryForm, sortOrder: nextSort(content.gallery) });
+      const uploaded = await uploadContentImage(galleryFile);
+      await createGalleryImage({ ...galleryForm, url: uploaded.url, sortOrder: nextSort(content.gallery) });
       setGalleryForm({ url: '', alt: '', category: 'exterior', sortOrder: 0 });
+      clearGalleryFile();
       setDialog(null);
       await loadContent();
       toast({ title: 'Gallery image added', description: 'The image is now visible in the website gallery.' });
@@ -162,8 +175,14 @@ export default function AdminContentPage() {
     event.preventDefault();
     setSaving(true);
     try {
-      await createAttraction({ ...attractionForm, sortOrder: nextSort(content.attractions) });
+      const uploaded = attractionFile ? await uploadContentImage(attractionFile) : null;
+      await createAttraction({
+        ...attractionForm,
+        image: uploaded?.url ?? attractionForm.image,
+        sortOrder: nextSort(content.attractions),
+      });
       setAttractionForm({ name: '', description: '', distance: '', image: '', category: 'Area', sortOrder: 0 });
+      clearAttractionFile();
       setDialog(null);
       await loadContent();
       toast({ title: 'Attraction added', description: 'The attraction is now visible on the website.' });
@@ -172,6 +191,51 @@ export default function AdminContentPage() {
     } finally {
       setSaving(false);
     }
+  }
+
+  function validateImageFile(file: File) {
+    if (!allowedImageTypes.includes(file.type)) {
+      throw new Error('Only JPG, PNG, and WebP images can be uploaded.');
+    }
+    if (file.size > maxImageBytes) {
+      throw new Error('Images must be 5 MB or smaller.');
+    }
+  }
+
+  function chooseGalleryFile(file: File | undefined) {
+    if (!file) return;
+    try {
+      validateImageFile(file);
+      clearGalleryFile();
+      setGalleryFile(file);
+      setGalleryPreview(URL.createObjectURL(file));
+    } catch (err) {
+      showError('Image was not selected', err);
+    }
+  }
+
+  function chooseAttractionFile(file: File | undefined) {
+    if (!file) return;
+    try {
+      validateImageFile(file);
+      clearAttractionFile();
+      setAttractionFile(file);
+      setAttractionPreview(URL.createObjectURL(file));
+    } catch (err) {
+      showError('Image was not selected', err);
+    }
+  }
+
+  function clearGalleryFile() {
+    if (galleryPreview.startsWith('blob:')) URL.revokeObjectURL(galleryPreview);
+    setGalleryFile(null);
+    setGalleryPreview('');
+  }
+
+  function clearAttractionFile() {
+    if (attractionPreview.startsWith('blob:')) URL.revokeObjectURL(attractionPreview);
+    setAttractionFile(null);
+    setAttractionPreview('');
   }
 
   function showError(title: string, err: unknown) {
@@ -313,9 +377,14 @@ export default function AdminContentPage() {
           <div className="space-y-3">
             {content.attractions.map(attraction => (
               <Card key={attraction.id} className="p-4 flex items-start justify-between gap-4">
-                <div>
-                  <p className="font-medium text-sm">{attraction.name}</p>
-                  <p className="text-xs text-muted-foreground">{attraction.distance} - {attraction.description}</p>
+                <div className="flex min-w-0 flex-1 items-start gap-3">
+                  {attraction.image && (
+                    <img src={resolveContentImage(attraction.image)} alt="" className="h-16 w-20 shrink-0 rounded-md object-cover" />
+                  )}
+                  <div className="min-w-0">
+                    <p className="font-medium text-sm">{attraction.name}</p>
+                    <p className="text-xs text-muted-foreground">{attraction.distance} - {attraction.description}</p>
+                  </div>
                 </div>
                 <Button variant="ghost" size="icon" onClick={() => removeItem('attraction', attraction.id, attraction.name)} disabled={saving}>
                   <Trash2 className="h-4 w-4" />
@@ -348,13 +417,25 @@ export default function AdminContentPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Add Gallery Image</DialogTitle>
-            <DialogDescription>Use a public image URL, such as a hosted JPG, PNG, or WebP.</DialogDescription>
+            <DialogDescription>Upload a JPG, PNG, or WebP image up to 5 MB.</DialogDescription>
           </DialogHeader>
           <form onSubmit={submitGallery} className="space-y-4">
-            <Field label="Image URL"><Input required value={galleryForm.url} onChange={event => setGalleryForm({ ...galleryForm, url: event.target.value })} /></Field>
+            <ImageUploadField
+              label="Image"
+              fileName={galleryFile?.name}
+              previewUrl={galleryPreview}
+              required
+              onChange={chooseGalleryFile}
+              onClear={clearGalleryFile}
+            />
             <Field label="Alt Text"><Input required value={galleryForm.alt} onChange={event => setGalleryForm({ ...galleryForm, alt: event.target.value })} /></Field>
             <Field label="Category"><Input required value={galleryForm.category} onChange={event => setGalleryForm({ ...galleryForm, category: event.target.value as GalleryImage['category'] })} /></Field>
-            <DialogFooter><Button type="submit" disabled={saving}>Add Image</Button></DialogFooter>
+            <DialogFooter>
+              <Button type="submit" disabled={saving}>
+                {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Add Image
+              </Button>
+            </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
@@ -388,11 +469,22 @@ export default function AdminContentPage() {
             <Field label="Name"><Input required value={attractionForm.name} onChange={event => setAttractionForm({ ...attractionForm, name: event.target.value })} /></Field>
             <Field label="Distance"><Input required value={attractionForm.distance} onChange={event => setAttractionForm({ ...attractionForm, distance: event.target.value })} /></Field>
             <Field label="Description"><Textarea required value={attractionForm.description} onChange={event => setAttractionForm({ ...attractionForm, description: event.target.value })} /></Field>
-            <div className="grid grid-cols-2 gap-3">
+            <ImageUploadField
+              label="Attraction image"
+              fileName={attractionFile?.name}
+              previewUrl={attractionPreview}
+              onChange={chooseAttractionFile}
+              onClear={clearAttractionFile}
+            />
+            <div className="grid grid-cols-1 gap-3">
               <Field label="Category"><Input required value={attractionForm.category} onChange={event => setAttractionForm({ ...attractionForm, category: event.target.value })} /></Field>
-              <Field label="Image URL"><Input value={attractionForm.image} onChange={event => setAttractionForm({ ...attractionForm, image: event.target.value })} /></Field>
             </div>
-            <DialogFooter><Button type="submit" disabled={saving}>Add Attraction</Button></DialogFooter>
+            <DialogFooter>
+              <Button type="submit" disabled={saving}>
+                {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Add Attraction
+              </Button>
+            </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
@@ -405,6 +497,60 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
     <div className="space-y-2">
       <Label>{label}</Label>
       {children}
+    </div>
+  );
+}
+
+function ImageUploadField({
+  label,
+  fileName,
+  previewUrl,
+  required = false,
+  onChange,
+  onClear,
+}: {
+  label: string;
+  fileName?: string;
+  previewUrl: string;
+  required?: boolean;
+  onChange: (file: File | undefined) => void;
+  onClear: () => void;
+}) {
+  const inputId = `content-upload-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+  return (
+    <div className="space-y-2">
+      <Label htmlFor={inputId}>{label}{required ? ' *' : ''}</Label>
+      <div className="flex flex-col gap-3">
+        {previewUrl ? (
+          <div className="relative overflow-hidden rounded-md border bg-muted">
+            <img src={previewUrl} alt="" className="h-48 w-full object-cover" />
+          </div>
+        ) : (
+          <div className="flex h-36 items-center justify-center rounded-md border border-dashed bg-muted/40 text-muted-foreground">
+            <ImageIcon className="mr-2 h-5 w-5" />
+            <span className="text-sm">No image selected</span>
+          </div>
+        )}
+        <div className="flex flex-wrap items-center gap-2">
+          <Input
+            id={inputId}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            className="hidden"
+            onChange={event => onChange(event.target.files?.[0])}
+          />
+          <Button type="button" variant="outline" onClick={() => document.getElementById(inputId)?.click()}>
+            <Upload className="mr-2 h-4 w-4" />
+            Choose Image
+          </Button>
+          {fileName && <span className="text-xs text-muted-foreground">{fileName}</span>}
+          {previewUrl && (
+            <Button type="button" variant="ghost" size="sm" onClick={onClear}>
+              Remove
+            </Button>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

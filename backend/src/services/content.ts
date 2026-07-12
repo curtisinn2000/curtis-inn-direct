@@ -15,10 +15,10 @@ export async function getWebsiteContent(db: DbClient, options: { admin?: boolean
   const activeFilter = options.admin ? '' : 'where is_active = true';
   const hero = await getHero(db);
   const [faqs, gallery, reviews, attractions] = await Promise.all([
-    db.query(`select * from website_faqs ${activeFilter} order by sort_order, category, question`),
-    db.query(`select * from website_gallery_images ${activeFilter} order by sort_order, category, alt`),
-    db.query(`select * from website_reviews ${activeFilter} order by sort_order, review_date desc, guest_name`),
-    db.query(`select * from website_attractions ${activeFilter} order by sort_order, name`),
+    db.query(`select * from website_faqs ${activeFilter} order by sort_order desc, created_at desc, category, question`),
+    db.query(`select * from website_gallery_images ${activeFilter} order by sort_order desc, created_at desc, category, alt`),
+    db.query(`select * from website_reviews ${activeFilter} order by sort_order desc, created_at desc, review_date desc, guest_name`),
+    db.query(`select * from website_attractions ${activeFilter} order by sort_order desc, created_at desc, name`),
   ]);
 
   return {

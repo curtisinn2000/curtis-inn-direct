@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import multer from 'multer';
 import { z } from 'zod';
 import { pool, withTransaction } from '../db.js';
 import { asyncHandler, requireAdmin, requireAuth } from '../middleware.js';
@@ -31,6 +32,7 @@ import { badRequest, notFound } from '../errors.js';
 import { config } from '../config.js';
 import { addDaysKey, hotelTodayKey } from '../date-utils.js';
 import { getWebsiteContent } from '../services/content.js';
+import { uploadContentImage, validateContentImage } from '../services/uploads.js';
 
 export const adminRouter = Router();
 
@@ -43,6 +45,18 @@ const calendarQuerySchema = z.object({
 });
 
 const ACTIVE_HOLD_STATUSES = ['pending', 'confirmed', 'checked_in'];
+const contentImageUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024, files: 1 },
+  fileFilter: (_req, file, callback) => {
+    try {
+      validateContentImage(file as Express.Multer.File);
+      callback(null, true);
+    } catch (error) {
+      callback(error as Error);
+    }
+  },
+});
 
 adminRouter.get('/dashboard', asyncHandler(async (_req, res) => {
   const stats = await pool.query(
@@ -101,6 +115,19 @@ adminRouter.put('/content/hero', asyncHandler(async (req, res) => {
     await audit(client, { actorId: req.user!.id, entity: 'website_content', entityId: 'hero', action: 'update', after: input });
   });
   res.json((await getWebsiteContent(pool, { admin: true })).hero);
+}));
+
+adminRouter.post('/content/uploads', contentImageUpload.single('image'), asyncHandler(async (req, res) => {
+  validateContentImage(req.file);
+  const uploaded = await uploadContentImage(req.file);
+  await audit(pool, {
+    actorId: req.user!.id,
+    entity: 'website_content_upload',
+    entityId: uploaded.objectName,
+    action: 'upload',
+    after: uploaded,
+  });
+  res.status(201).json(uploaded);
 }));
 
 adminRouter.post('/content/faqs', asyncHandler(async (req, res) => {

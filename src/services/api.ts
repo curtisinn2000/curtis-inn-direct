@@ -39,6 +39,13 @@ export interface RoomTypeWritePayload {
   sortOrder?: number;
 }
 
+export interface ContentImageUploadResult {
+  url: string;
+  objectName: string;
+  contentType: string;
+  size: number;
+}
+
 export async function searchAvailability(search: AvailabilitySearch): Promise<AvailabilityResult[]> {
   return apiRequest<AvailabilityResult[]>('/availability/search', jsonBody(search));
 }
@@ -97,6 +104,15 @@ export async function deleteFaq(id: string): Promise<{ ok: true }> {
 
 export async function createGalleryImage(data: Omit<GalleryImage, 'id'>): Promise<GalleryImage> {
   return apiRequest<GalleryImage>('/admin/content/gallery', jsonBody(data));
+}
+
+export async function uploadContentImage(file: File): Promise<ContentImageUploadResult> {
+  const formData = new FormData();
+  formData.append('image', file);
+  return apiRequest<ContentImageUploadResult>('/admin/content/uploads', {
+    method: 'POST',
+    body: formData,
+  });
 }
 
 export async function deleteGalleryImage(id: string): Promise<{ ok: true }> {
