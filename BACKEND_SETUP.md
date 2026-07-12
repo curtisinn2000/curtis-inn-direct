@@ -64,6 +64,12 @@ Frontend Vercel env:
 
 - `VITE_API_BASE_URL=https://YOUR_CLOUD_RUN_URL/api`
 
+Production `ALLOWED_ORIGINS` must include every public frontend origin that will call the backend from a browser, for example:
+
+```text
+https://curtisinnsuites.com,https://curtis-inn-direct.vercel.app,https://curtis-inn-direct-curtis-inn.vercel.app,https://curtis-inn-direct-git-main-curtis-inn.vercel.app
+```
+
 Local frontend env:
 
 ```powershell
