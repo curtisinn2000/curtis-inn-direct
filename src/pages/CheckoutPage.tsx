@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,11 +6,9 @@ import { Label } from '@/components/ui/label';
 import { Card } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
-import { MOCK_ROOMS } from '@/data/mock-rooms';
-import { useInventoryStore, getRoomBySlug } from '@/store/inventoryStore';
 import { PROPERTY } from '@/config/constants';
-import type { PaymentMethod, GuestInfo, BookingFormData } from '@/types';
-import { createReservation, createStripeCheckoutSession } from '@/services/api';
+import type { PaymentMethod, GuestInfo, BookingFormData, RoomType } from '@/types';
+import { createReservation, createStripeCheckoutSession, getRoomBySlug } from '@/services/api';
 import { CreditCard, Loader2, ArrowLeft, Lock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -18,12 +16,10 @@ export default function CheckoutPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  const roomSlug = searchParams.get('roomSlug') || '';
-  const storeRoom = useInventoryStore(s => getRoomBySlug(s, roomSlug));
-  const fallback = MOCK_ROOMS.find(r => r.slug === roomSlug);
-  const room = storeRoom
-    ? { id: storeRoom.id, slug: storeRoom.slug, name: storeRoom.name, basePrice: storeRoom.basePrice }
-    : fallback;
+  const roomSlug = searchParams.get('roomSlug') || searchParams.get('room') || '';
+  const [room, setRoom] = useState<RoomType | null>(null);
+  const [roomLoading, setRoomLoading] = useState(true);
+  const [roomError, setRoomError] = useState('');
   const nights = Number(searchParams.get('nights')) || 1;
   const total = Number(searchParams.get('total')) || 0;
   const taxes = Number(searchParams.get('taxes')) || 0;
@@ -40,10 +36,47 @@ export default function CheckoutPage() {
   const paymentMethod: PaymentMethod = 'stripe_pay_now';
   const [submitting, setSubmitting] = useState(false);
 
+  useEffect(() => {
+    let cancelled = false;
+    async function loadRoom() {
+      if (!roomSlug) {
+        setRoom(null);
+        setRoomLoading(false);
+        setRoomError('');
+        return;
+      }
+      setRoomLoading(true);
+      setRoomError('');
+      try {
+        const result = await getRoomBySlug(roomSlug);
+        if (!cancelled) setRoom(result);
+      } catch (err) {
+        if (!cancelled) {
+          setRoom(null);
+          setRoomError(err instanceof Error ? err.message : 'Room type was not found.');
+        }
+      } finally {
+        if (!cancelled) setRoomLoading(false);
+      }
+    }
+    void loadRoom();
+    return () => { cancelled = true; };
+  }, [roomSlug]);
+
+  if (roomLoading) {
+    return (
+      <div className="section-padding container-narrow text-center">
+        <Loader2 className="h-6 w-6 animate-spin mx-auto mb-4 text-muted-foreground" />
+        <p className="text-sm text-muted-foreground">Loading room...</p>
+      </div>
+    );
+  }
+
   if (!room) {
     return (
       <div className="section-padding container-narrow text-center">
         <h1 className="text-headline mb-4">No room selected</h1>
+        {roomError && <p className="text-sm text-muted-foreground mb-6">{roomError}</p>}
         <Button asChild><a href="/booking">Back to search</a></Button>
       </div>
     );
@@ -59,19 +92,19 @@ export default function CheckoutPage() {
             id: room.id,
             slug: room.slug,
             name: room.name,
-            shortDescription: '',
-            longDescription: '',
-            occupancy: guests,
-            bedType: '',
-            images: [],
-            amenities: [],
-            policies: [],
+            shortDescription: room.shortDescription,
+            longDescription: room.longDescription,
+            occupancy: room.occupancy,
+            bedType: room.bedType,
+            images: room.images,
+            amenities: room.amenities,
+            policies: room.policies,
             basePrice: room.basePrice,
-            taxRate: 0,
-            isActive: true,
-            inventoryCount: rooms,
-            cancellationTerms: '',
-            sortOrder: 0,
+            taxRate: room.taxRate,
+            isActive: room.isActive,
+            inventoryCount: room.inventoryCount,
+            cancellationTerms: room.cancellationTerms,
+            sortOrder: room.sortOrder,
           },
           available: rooms,
           nightlyRate: Math.max(0, (total - taxes) / nights),

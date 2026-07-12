@@ -14,6 +14,23 @@ import type {
 } from '@/types';
 import { apiRequest, jsonBody } from './client';
 
+export interface RoomTypeWritePayload {
+  name: string;
+  slug?: string;
+  shortDescription: string;
+  longDescription: string;
+  occupancy: number;
+  bedType: string;
+  baseInventory: number;
+  basePrice: number;
+  isActive: boolean;
+  images: string[];
+  amenities?: string[];
+  policies?: string[];
+  cancellationTerms?: string;
+  sortOrder?: number;
+}
+
 export async function searchAvailability(search: AvailabilitySearch): Promise<AvailabilityResult[]> {
   return apiRequest<AvailabilityResult[]>('/availability/search', jsonBody(search));
 }
@@ -40,6 +57,27 @@ export async function validatePromoCode(code: string): Promise<PromoCode | null>
 
 export async function getDashboardStats(): Promise<DashboardStats> {
   return apiRequest<DashboardStats>('/admin/dashboard');
+}
+
+export async function getAdminRoomTypes(): Promise<RoomType[]> {
+  return apiRequest<RoomType[]>('/admin/rooms');
+}
+
+export async function createAdminRoomType(data: RoomTypeWritePayload): Promise<RoomType> {
+  return apiRequest<RoomType>('/admin/rooms', jsonBody(data));
+}
+
+export async function updateAdminRoomType(id: string, data: RoomTypeWritePayload): Promise<RoomType> {
+  return apiRequest<RoomType>(`/admin/rooms/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteAdminRoomType(id: string): Promise<RoomType> {
+  return apiRequest<RoomType>(`/admin/rooms/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
 }
 
 export async function getReservations(): Promise<Reservation[]> {

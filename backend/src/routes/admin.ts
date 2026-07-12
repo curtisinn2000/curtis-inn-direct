@@ -156,6 +156,7 @@ adminRouter.post('/rooms', asyncHandler(async (req, res) => {
 }));
 
 adminRouter.put('/rooms/:id', asyncHandler(async (req, res) => {
+  const roomId = z.string().uuid().parse(req.params.id);
   const input = roomWriteSchema.parse(req.body);
   const result = await pool.query(
     `update room_types set
@@ -166,13 +167,36 @@ adminRouter.put('/rooms/:id', asyncHandler(async (req, res) => {
      where id=$1
      returning *, $15::numeric as tax_rate`,
     [
-      req.params.id, input.name, input.shortDescription, input.longDescription, input.occupancy, input.bedType,
+      roomId, input.name, input.shortDescription, input.longDescription, input.occupancy, input.bedType,
       input.baseInventory, input.basePrice, input.isActive, input.images, input.amenities ?? null,
       input.policies ?? null, input.cancellationTerms ?? null, input.sortOrder, config.TAX_RATE,
     ],
   );
   if (!result.rowCount) throw notFound('room_not_found', 'Room type was not found.');
-  await audit(pool, { actorId: req.user!.id, entity: 'room_type', entityId: String(req.params.id), action: 'update', after: input });
+  await audit(pool, { actorId: req.user!.id, entity: 'room_type', entityId: roomId, action: 'update', after: input });
+  res.json(roomFromRow(result.rows[0]));
+}));
+
+adminRouter.delete('/rooms/:id', asyncHandler(async (req, res) => {
+  const roomId = z.string().uuid().parse(req.params.id);
+  const before = await pool.query(`select * from room_types where id = $1`, [roomId]);
+  if (!before.rowCount) throw notFound('room_not_found', 'Room type was not found.');
+
+  const result = await pool.query(
+    `update room_types
+     set is_active = false, updated_at = now()
+     where id = $1
+     returning *, $2::numeric as tax_rate`,
+    [roomId, config.TAX_RATE],
+  );
+  await audit(pool, {
+    actorId: req.user!.id,
+    entity: 'room_type',
+    entityId: roomId,
+    action: 'deactivate',
+    before: roomFromRow({ ...before.rows[0], tax_rate: config.TAX_RATE }),
+    after: roomFromRow(result.rows[0]),
+  });
   res.json(roomFromRow(result.rows[0]));
 }));
 

@@ -1,18 +1,20 @@
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { PROPERTY, AMENITIES_LIST } from '@/config/constants';
-import { MOCK_ROOMS } from '@/data/mock-rooms';
 import { MOCK_REVIEWS, MOCK_FAQS, MOCK_ATTRACTIONS } from '@/data/mock-data';
 import { BookingWidget } from '@/components/booking/BookingWidget';
 import { RatingBadgesRow } from '@/components/RatingBadgesRow';
 import { AutoRotatingGallery } from '@/components/AutoRotatingGallery';
 import { ScrollingPhotoRail } from '@/components/ScrollingPhotoRail';
-import { Star, ArrowRight, Waves, Wifi, Car, Wind, WashingMachine, Flame, MapPin, Users, ChevronRight } from 'lucide-react';
+import { Star, ArrowRight, Waves, Wifi, Car, Wind, WashingMachine, Flame, MapPin, Users, ChevronRight, Loader2 } from 'lucide-react';
 import heroImg from '@/assets/hero-hotel.jpg';
 import poolImg from '@/assets/pool.jpg';
 import beachImg from '@/assets/beach.jpg';
 import roomImg from '@/assets/room-king.jpg';
+import type { RoomType } from '@/types';
+import { getRoomTypes } from '@/services/api';
 
 const gallerySlides = [
   { src: heroImg, alt: 'Hotel exterior' },
@@ -35,9 +37,29 @@ const iconMap: Record<string, React.ElementType> = {
 };
 
 export default function HomePage() {
-  const featuredRooms = MOCK_ROOMS.filter(r => r.isActive).slice(0, 4);
+  const [featuredRooms, setFeaturedRooms] = useState<RoomType[]>([]);
+  const [roomsLoading, setRoomsLoading] = useState(true);
+  const [roomsError, setRoomsError] = useState('');
   const featuredReviews = MOCK_REVIEWS.filter(r => r.isFeatured).slice(0, 4);
   const featuredFaqs = MOCK_FAQS.slice(0, 4);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadRooms() {
+      setRoomsLoading(true);
+      setRoomsError('');
+      try {
+        const rooms = await getRoomTypes();
+        if (!cancelled) setFeaturedRooms(rooms.slice(0, 4));
+      } catch (err) {
+        if (!cancelled) setRoomsError(err instanceof Error ? err.message : 'Unable to load rooms.');
+      } finally {
+        if (!cancelled) setRoomsLoading(false);
+      }
+    }
+    void loadRooms();
+    return () => { cancelled = true; };
+  }, []);
 
   return (
     <div>
@@ -127,12 +149,21 @@ export default function HomePage() {
               <Link to="/rooms">View all rooms <ArrowRight className="ml-1 h-4 w-4" /></Link>
             </Button>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+          {roomsLoading && (
+            <Card className="p-8 text-center text-sm text-muted-foreground">
+              <Loader2 className="h-5 w-5 animate-spin mx-auto mb-3" />
+              Loading rooms...
+            </Card>
+          )}
+          {!roomsLoading && roomsError && (
+            <Card className="p-8 text-center text-sm text-destructive">{roomsError}</Card>
+          )}
+          {!roomsLoading && !roomsError && featuredRooms.length > 0 && <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
             {featuredRooms.map(room => (
               <Link key={room.slug} to={`/room/${room.slug}`}>
                 <Card className="overflow-hidden group hover:shadow-lg transition-all duration-300">
                   <div className="aspect-[4/3] bg-muted relative overflow-hidden">
-                    <img src={roomImg} alt={room.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
+                    <img src={room.images[0] ?? roomImg} alt={room.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
                   </div>
                   <div className="p-4">
                     <h3 className="font-semibold mb-1">{room.name}</h3>
@@ -151,7 +182,7 @@ export default function HomePage() {
                 </Card>
               </Link>
             ))}
-          </div>
+          </div>}
           <div className="mt-6 md:hidden">
             <Button variant="outline" asChild className="w-full">
               <Link to="/rooms">View all rooms</Link>

@@ -25,16 +25,7 @@ export type PaymentMethod =
   | 'pay_at_property'
   | 'clover_deposit';
 
-export type RoomCategorySlug =
-  | 'king-room'
-  | 'standard-room'
-  | 'traditional-room'
-  | 'deluxe-studio-suite'
-  | 'one-bedroom-suite'
-  | 'two-bedroom-suite'
-  | 'superior-two-double'
-  | 'superior-two-double-ada'
-  | 'economy-single';
+export type RoomCategorySlug = string;
 
 // --- Room Types ---
 export interface RoomType {

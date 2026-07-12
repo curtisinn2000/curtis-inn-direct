@@ -1,12 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { MOCK_ROOMS } from '@/data/mock-rooms';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Users, BedDouble, Check, ArrowLeft } from 'lucide-react';
+import { Users, BedDouble, Check, ArrowLeft, Loader2 } from 'lucide-react';
 import roomImg from '@/assets/room-king.jpg';
-import { useInventoryStore, getRemaining, getRoomBySlug } from '@/store/inventoryStore';
-import { startOfToday } from 'date-fns';
+import type { RoomType } from '@/types';
+import { getRoomBySlug } from '@/services/api';
 
 const DEFAULT_AMENITIES = ['Free Wi-Fi', 'Air Conditioning', 'Flat-screen TV', 'Private Bathroom'];
 const DEFAULT_POLICIES = ['Non-smoking', 'No pets'];
@@ -14,36 +13,61 @@ const DEFAULT_CANCELLATION = 'Free cancellation up to 48 hours before check-in.'
 
 export default function RoomDetailPage() {
   const { slug } = useParams<{ slug: string }>();
-  const state = useInventoryStore();
-  const live = slug ? getRoomBySlug(state, slug) : undefined;
-  const fallback = MOCK_ROOMS.find(r => r.slug === slug);
-
-  const room = live ?? (fallback ? {
-    id: fallback.id, slug: fallback.slug, name: fallback.name,
-    shortDescription: fallback.shortDescription, longDescription: fallback.longDescription,
-    occupancy: fallback.occupancy, bedType: fallback.bedType,
-    baseInventory: fallback.inventoryCount, basePrice: fallback.basePrice,
-    isActive: fallback.isActive, images: [], sortOrder: fallback.sortOrder,
-  } : null);
-
-  const taxRate = fallback?.taxRate ?? 0.13;
-  const amenities = fallback?.amenities ?? DEFAULT_AMENITIES;
-  const policies = fallback?.policies ?? DEFAULT_POLICIES;
-  const cancellationTerms = fallback?.cancellationTerms ?? DEFAULT_CANCELLATION;
-
+  const [room, setRoom] = useState<RoomType | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [activeImg, setActiveImg] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadRoom() {
+      if (!slug) {
+        setRoom(null);
+        setLoading(false);
+        return;
+      }
+      setLoading(true);
+      setError(null);
+      setActiveImg(0);
+      try {
+        const result = await getRoomBySlug(slug);
+        if (!cancelled) setRoom(result);
+      } catch (err) {
+        if (!cancelled) {
+          setRoom(null);
+          setError(err instanceof Error ? err.message : 'Room type was not found.');
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    void loadRoom();
+    return () => { cancelled = true; };
+  }, [slug]);
+
+  if (loading) {
+    return (
+      <div className="section-padding container-narrow text-center">
+        <Loader2 className="h-6 w-6 animate-spin mx-auto mb-4 text-muted-foreground" />
+        <p className="text-sm text-muted-foreground">Loading room...</p>
+      </div>
+    );
+  }
 
   if (!room) {
     return (
       <div className="section-padding container-narrow text-center">
         <h1 className="text-headline mb-4">Room not found</h1>
+        {error && <p className="text-sm text-muted-foreground mb-6">{error}</p>}
         <Button asChild><Link to="/rooms">Back to rooms</Link></Button>
       </div>
     );
   }
 
-  const remaining = getRemaining(state, room.id, startOfToday());
-  const soldOut = remaining === 0;
+  const amenities = room.amenities.length ? room.amenities : DEFAULT_AMENITIES;
+  const policies = room.policies.length ? room.policies : DEFAULT_POLICIES;
+  const cancellationTerms = room.cancellationTerms || DEFAULT_CANCELLATION;
+  const soldOut = room.inventoryCount === 0;
   const images = room.images.length ? room.images : [roomImg];
 
   return (
@@ -54,7 +78,6 @@ export default function RoomDetailPage() {
         </Link>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-          {/* Image gallery */}
           <div>
             <div className="aspect-[4/3] rounded-xl overflow-hidden bg-muted">
               <img src={images[activeImg]} alt={room.name} className="w-full h-full object-cover" />
@@ -70,10 +93,9 @@ export default function RoomDetailPage() {
             )}
           </div>
 
-          {/* Details */}
           <div>
             <Badge variant="secondary" className="mb-3">
-              {soldOut ? 'Sold out today' : `${remaining} available today`}
+              {soldOut ? 'Sold out' : `${room.inventoryCount} rooms online`}
             </Badge>
             <h1 className="text-headline mb-2">{room.name}</h1>
             <p className="text-body text-muted-foreground mb-6">{room.longDescription}</p>
@@ -88,11 +110,11 @@ export default function RoomDetailPage() {
                 <span className="text-3xl font-bold">${room.basePrice}</span>
                 <span className="text-muted-foreground text-sm pb-1">/ night</span>
               </div>
-              <p className="text-xs text-muted-foreground">+ {(taxRate * 100).toFixed(0)}% taxes & fees</p>
+              <p className="text-xs text-muted-foreground">+ {(room.taxRate * 100).toFixed(0)}% taxes & fees</p>
             </div>
 
             <Button asChild size="lg" disabled={soldOut} className="w-full bg-accent text-accent-foreground hover:bg-accent/90 mb-6">
-              <Link to={`/booking?room=${room.slug}`}>{soldOut ? 'Sold out — Check other dates' : 'Book This Room'}</Link>
+              <Link to={`/booking?roomSlug=${room.slug}`}>{soldOut ? 'Sold out - Check other dates' : 'Book This Room'}</Link>
             </Button>
 
             <div className="mb-6">

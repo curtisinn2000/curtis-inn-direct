@@ -1,18 +1,35 @@
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Users, BedDouble, ArrowRight } from 'lucide-react';
+import { Users, BedDouble, ArrowRight, Loader2 } from 'lucide-react';
 import roomImg from '@/assets/room-king.jpg';
-import { useInventoryStore, getRemaining, listRoomTypes } from '@/store/inventoryStore';
-import { startOfToday } from 'date-fns';
+import type { RoomType } from '@/types';
+import { getRoomTypes } from '@/services/api';
 
 export default function RoomsPage() {
-  const state = useInventoryStore();
-  const today = startOfToday();
-  const rooms = listRoomTypes(state)
-    .filter(r => r.isActive)
-    .map(r => ({ ...r, soldOut: r.baseInventory === 0 || getRemaining(state, r.id, today) === 0 }));
+  const [rooms, setRooms] = useState<RoomType[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadRooms() {
+      setLoading(true);
+      setError(null);
+      try {
+        const result = await getRoomTypes();
+        if (!cancelled) setRooms(result);
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Unable to load rooms.');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    void loadRooms();
+    return () => { cancelled = true; };
+  }, []);
 
   return (
     <div className="section-padding">
@@ -25,13 +42,32 @@ export default function RoomsPage() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {loading && (
+          <Card className="p-10 text-center text-sm text-muted-foreground">
+            <Loader2 className="h-5 w-5 animate-spin mx-auto mb-3" />
+            Loading rooms...
+          </Card>
+        )}
+
+        {!loading && error && (
+          <Card className="p-10 text-center">
+            <p className="text-sm text-destructive">{error}</p>
+          </Card>
+        )}
+
+        {!loading && !error && rooms.length === 0 && (
+          <Card className="p-10 text-center text-sm text-muted-foreground">
+            No rooms are currently available online.
+          </Card>
+        )}
+
+        {!loading && !error && rooms.length > 0 && <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {rooms.map(room => (
             <Link key={room.slug} to={`/room/${room.slug}`}>
               <Card className="overflow-hidden group hover:shadow-lg transition-all duration-300 h-full flex flex-col">
                 <div className="aspect-[16/10] bg-muted relative overflow-hidden">
                   <img src={room.images[0] ?? roomImg} alt={room.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
-                  {room.soldOut && (
+                  {room.inventoryCount === 0 && (
                     <div className="absolute top-3 left-3">
                       <Badge variant="secondary" className="bg-foreground text-background">Sold out</Badge>
                     </div>
@@ -57,7 +93,7 @@ export default function RoomsPage() {
               </Card>
             </Link>
           ))}
-        </div>
+        </div>}
       </div>
     </div>
   );

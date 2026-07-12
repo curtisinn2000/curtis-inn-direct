@@ -7,7 +7,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, ArrowRight, Star, Trash2, Upload } from 'lucide-react';
-import type { RoomTypeRecord } from '@/store/inventoryStore';
 
 export interface RoomFormValues {
   name: string;
@@ -21,10 +20,16 @@ export interface RoomFormValues {
   images: string[];
 }
 
+export type RoomTypeFormInitial = RoomFormValues & {
+  id?: string;
+  slug?: string;
+  sortOrder?: number;
+};
+
 interface Props {
   open: boolean;
   mode: 'add' | 'edit';
-  initial?: RoomTypeRecord;
+  initial?: RoomTypeFormInitial;
   onClose: () => void;
   onSubmit: (values: RoomFormValues) => void;
 }
