@@ -13,6 +13,12 @@ import type {
   AuditLog,
   AdminCalendarResponse,
   InventoryStatus,
+  FAQ,
+  GalleryImage,
+  NearbyAttraction,
+  PropertyContent,
+  Review,
+  WebsiteContent,
 } from '@/types';
 import { apiRequest, jsonBody } from './client';
 
@@ -49,6 +55,10 @@ export async function getRoomBySlug(slug: string): Promise<RoomType | null> {
   return apiRequest<RoomType>(`/rooms/${encodeURIComponent(slug)}`);
 }
 
+export async function getWebsiteContent(): Promise<WebsiteContent> {
+  return apiRequest<WebsiteContent>('/content');
+}
+
 export async function createReservation(data: BookingFormData): Promise<Reservation> {
   return apiRequest<Reservation>('/reservations', jsonBody({
     ...data,
@@ -64,6 +74,49 @@ export async function validatePromoCode(code: string): Promise<PromoCode | null>
 
 export async function getDashboardStats(): Promise<DashboardStats> {
   return apiRequest<DashboardStats>('/admin/dashboard');
+}
+
+export async function getAdminWebsiteContent(): Promise<WebsiteContent> {
+  return apiRequest<WebsiteContent>('/admin/content');
+}
+
+export async function updateHeroContent(data: Pick<PropertyContent, 'heroTitle' | 'heroSubtitle' | 'heroDescription'>): Promise<PropertyContent> {
+  return apiRequest<PropertyContent>('/admin/content/hero', {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function createFaq(data: Omit<FAQ, 'id'>): Promise<FAQ> {
+  return apiRequest<FAQ>('/admin/content/faqs', jsonBody(data));
+}
+
+export async function deleteFaq(id: string): Promise<{ ok: true }> {
+  return apiRequest<{ ok: true }>(`/admin/content/faqs/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+export async function createGalleryImage(data: Omit<GalleryImage, 'id'>): Promise<GalleryImage> {
+  return apiRequest<GalleryImage>('/admin/content/gallery', jsonBody(data));
+}
+
+export async function deleteGalleryImage(id: string): Promise<{ ok: true }> {
+  return apiRequest<{ ok: true }>(`/admin/content/gallery/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+export async function createReview(data: Omit<Review, 'id'>): Promise<Review> {
+  return apiRequest<Review>('/admin/content/reviews', jsonBody(data));
+}
+
+export async function deleteReview(id: string): Promise<{ ok: true }> {
+  return apiRequest<{ ok: true }>(`/admin/content/reviews/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+export async function createAttraction(data: Omit<NearbyAttraction, 'id'>): Promise<NearbyAttraction> {
+  return apiRequest<NearbyAttraction>('/admin/content/attractions', jsonBody(data));
+}
+
+export async function deleteAttraction(id: string): Promise<{ ok: true }> {
+  return apiRequest<{ ok: true }>(`/admin/content/attractions/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
 
 export async function getAdminRoomTypes(): Promise<RoomType[]> {

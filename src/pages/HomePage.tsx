@@ -1,9 +1,8 @@
-import { useEffect, useState } from 'react';
+import { ElementType, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { PROPERTY, AMENITIES_LIST } from '@/config/constants';
-import { MOCK_REVIEWS, MOCK_FAQS, MOCK_ATTRACTIONS } from '@/data/mock-data';
 import { BookingWidget } from '@/components/booking/BookingWidget';
 import { RatingBadgesRow } from '@/components/RatingBadgesRow';
 import { AutoRotatingGallery } from '@/components/AutoRotatingGallery';
@@ -13,8 +12,9 @@ import heroImg from '@/assets/hero-hotel.jpg';
 import poolImg from '@/assets/pool.jpg';
 import beachImg from '@/assets/beach.jpg';
 import roomImg from '@/assets/room-king.jpg';
-import type { RoomType } from '@/types';
-import { getRoomTypes } from '@/services/api';
+import type { RoomType, WebsiteContent } from '@/types';
+import { getRoomTypes, getWebsiteContent } from '@/services/api';
+import { fallbackContentImages, resolveContentImage } from '@/lib/contentImages';
 
 const gallerySlides = [
   { src: heroImg, alt: 'Hotel exterior' },
@@ -32,16 +32,25 @@ const railImages = [
   { src: poolImg, alt: 'Pool view' },
 ];
 
-const iconMap: Record<string, React.ElementType> = {
+const iconMap: Record<string, ElementType> = {
   Waves, Wifi, Car, Wind, WashingMachine, Flame,
 };
 
 export default function HomePage() {
   const [featuredRooms, setFeaturedRooms] = useState<RoomType[]>([]);
+  const [content, setContent] = useState<WebsiteContent | null>(null);
   const [roomsLoading, setRoomsLoading] = useState(true);
   const [roomsError, setRoomsError] = useState('');
-  const featuredReviews = MOCK_REVIEWS.filter(r => r.isFeatured).slice(0, 4);
-  const featuredFaqs = MOCK_FAQS.slice(0, 4);
+  const hero = content?.hero;
+  const featuredReviews = (content?.reviews ?? []).filter(r => r.isFeatured).slice(0, 4);
+  const featuredFaqs = (content?.faqs ?? []).slice(0, 4);
+  const featuredAttractions = (content?.attractions ?? []).slice(0, 3);
+  const contentGallerySlides = content?.gallery.length
+    ? content.gallery.map(image => ({ src: resolveContentImage(image.url, fallbackContentImages.hero), alt: image.alt }))
+    : gallerySlides;
+  const contentRailImages = content?.gallery.length
+    ? content.gallery.map(image => ({ src: resolveContentImage(image.url, fallbackContentImages.hero), alt: image.alt }))
+    : railImages;
 
   useEffect(() => {
     let cancelled = false;
@@ -58,6 +67,20 @@ export default function HomePage() {
       }
     }
     void loadRooms();
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadContent() {
+      try {
+        const data = await getWebsiteContent();
+        if (!cancelled) setContent(data);
+      } catch {
+        if (!cancelled) setContent(null);
+      }
+    }
+    void loadContent();
     return () => { cancelled = true; };
   }, []);
 
@@ -78,9 +101,12 @@ export default function HomePage() {
         <div className="absolute inset-0 bg-gradient-to-r from-foreground/40 via-foreground/15 to-transparent" />
         <div className="relative container-wide pb-24 pt-40 z-10">
           <div className="max-w-2xl">
-            <p className="text-overline text-primary-foreground/80 mb-3 [text-shadow:0_1px_2px_rgb(0_0_0_/_0.5)]">Hollywood, Florida</p>
-            <h1 className="text-display text-primary-foreground mb-4 [text-shadow:0_2px_24px_rgb(0_0_0_/_0.55)]">{PROPERTY.name}</h1>
+            <p className="text-overline text-primary-foreground/80 mb-3 [text-shadow:0_1px_2px_rgb(0_0_0_/_0.5)]">{hero?.heroSubtitle || 'Hollywood, Florida'}</p>
+            <h1 className="text-display text-primary-foreground mb-4 [text-shadow:0_2px_24px_rgb(0_0_0_/_0.55)]">{hero?.heroTitle || PROPERTY.name}</h1>
             <p className="text-body-lg text-primary-foreground/95 mb-8 [text-shadow:0_1px_8px_rgb(0_0_0_/_0.6)]">
+              {hero?.heroDescription || 'Affordable comfort steps from Hollywood Beach. Free parking, pool, and Wi-Fi - book direct for the best rates.'}
+            </p>
+            <p className="hidden">
               Affordable comfort steps from Hollywood Beach. Free parking, pool, and Wi-Fi — book direct for the best rates.
             </p>
             <div className="flex gap-3">
@@ -131,7 +157,7 @@ export default function HomePage() {
             <div className="grid grid-cols-2 gap-3">
               <AutoRotatingGallery slides={[{ src: poolImg, alt: 'Pool' }, { src: beachImg, alt: 'Beach' }]} className="h-48 lg:h-64" />
               <AutoRotatingGallery slides={[{ src: beachImg, alt: 'Beach' }, { src: poolImg, alt: 'Pool' }]} className="h-48 lg:h-64" interval={5000} />
-              <AutoRotatingGallery slides={gallerySlides} className="h-48 lg:h-64 col-span-2" interval={6000} />
+              <AutoRotatingGallery slides={contentGallerySlides} className="h-48 lg:h-64 col-span-2" interval={6000} />
             </div>
           </div>
         </div>
@@ -225,7 +251,7 @@ export default function HomePage() {
             </Button>
           </div>
         </div>
-        <ScrollingPhotoRail images={railImages} speed={35} />
+        <ScrollingPhotoRail images={contentRailImages} speed={35} />
       </section>
 
       {/* Nearby */}
@@ -236,7 +262,7 @@ export default function HomePage() {
             <h2 className="text-headline">Nearby attractions</h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {MOCK_ATTRACTIONS.slice(0, 3).map(attraction => (
+            {featuredAttractions.map(attraction => (
               <Card key={attraction.id} className="p-6 hover:shadow-md transition-shadow">
                 <div className="flex items-start gap-3 mb-3">
                   <MapPin className="h-5 w-5 text-accent shrink-0 mt-0.5" />
@@ -248,6 +274,11 @@ export default function HomePage() {
                 <p className="text-caption text-sm">{attraction.description}</p>
               </Card>
             ))}
+            {featuredAttractions.length === 0 && (
+              <Card className="p-6 text-center text-sm text-muted-foreground md:col-span-3">
+                Nearby attractions will be added soon.
+              </Card>
+            )}
           </div>
         </div>
       </section>
@@ -274,6 +305,11 @@ export default function HomePage() {
                 </div>
               </div>
             ))}
+            {featuredReviews.length === 0 && (
+              <div className="p-6 rounded-lg bg-primary-foreground/5 text-sm opacity-80 lg:col-span-4">
+                Guest reviews will be added soon.
+              </div>
+            )}
           </div>
         </div>
       </section>
@@ -292,6 +328,11 @@ export default function HomePage() {
                 <p className="text-sm text-muted-foreground">{faq.answer}</p>
               </div>
             ))}
+            {featuredFaqs.length === 0 && (
+              <div className="p-5 rounded-lg border text-center text-sm text-muted-foreground">
+                FAQ content will be added soon.
+              </div>
+            )}
           </div>
           <div className="text-center mt-8">
             <Button variant="outline" asChild>

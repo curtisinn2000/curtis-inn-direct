@@ -13,6 +13,7 @@ import { getActiveRooms, getRoomBySlug } from '../services/rooms.js';
 import { searchAvailability } from '../services/availability.js';
 import { createReservation, lookupReservation, quoteReservation } from '../services/reservations.js';
 import { notFound } from '../errors.js';
+import { getWebsiteContent } from '../services/content.js';
 
 export const publicRouter = Router();
 
@@ -35,6 +36,10 @@ publicRouter.get('/rooms/:slug', asyncHandler(async (req, res) => {
   const room = await getRoomBySlug(pool, String(req.params.slug));
   if (!room) throw notFound('room_not_found', 'Room type was not found.');
   res.json(room);
+}));
+
+publicRouter.get('/content', asyncHandler(async (_req, res) => {
+  res.json(await getWebsiteContent(pool));
 }));
 
 publicRouter.post('/availability/search', asyncHandler(async (req, res) => {

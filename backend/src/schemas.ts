@@ -120,3 +120,42 @@ export const bulkRatesSchema = z.object({
 export const statusUpdateSchema = z.object({
   status: z.enum(['pending', 'confirmed', 'checked_in', 'checked_out', 'cancelled', 'no_show']),
 });
+
+export const heroContentSchema = z.object({
+  heroTitle: z.string().trim().min(1).max(160),
+  heroSubtitle: z.string().trim().max(200).default(''),
+  heroDescription: z.string().trim().max(1000).default(''),
+});
+
+export const faqWriteSchema = z.object({
+  question: z.string().trim().min(1).max(300),
+  answer: z.string().trim().min(1).max(2000),
+  category: z.string().trim().min(1).max(80).default('General'),
+  sortOrder: z.coerce.number().int().min(0).max(9999).default(0),
+});
+
+export const galleryWriteSchema = z.object({
+  url: z.string().trim().min(1).max(2000),
+  alt: z.string().trim().min(1).max(300),
+  category: z.string().trim().min(1).max(80).default('exterior'),
+  sortOrder: z.coerce.number().int().min(0).max(9999).default(0),
+});
+
+export const reviewWriteSchema = z.object({
+  guestName: z.string().trim().min(1).max(120),
+  rating: z.coerce.number().int().min(1).max(5),
+  comment: z.string().trim().min(1).max(2000),
+  date: isoDateSchema,
+  source: z.string().trim().min(1).max(80).default('Direct'),
+  isFeatured: z.boolean().default(true),
+  sortOrder: z.coerce.number().int().min(0).max(9999).default(0),
+});
+
+export const attractionWriteSchema = z.object({
+  name: z.string().trim().min(1).max(160),
+  description: z.string().trim().min(1).max(2000),
+  distance: z.string().trim().min(1).max(80),
+  image: z.string().trim().max(2000).default(''),
+  category: z.string().trim().min(1).max(80).default('Area'),
+  sortOrder: z.coerce.number().int().min(0).max(9999).default(0),
+});

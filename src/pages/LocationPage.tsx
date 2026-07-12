@@ -1,10 +1,34 @@
 import { Card } from '@/components/ui/card';
 import { PROPERTY } from '@/config/constants';
-import { MOCK_ATTRACTIONS } from '@/data/mock-data';
-import { MapPin } from 'lucide-react';
+import { getWebsiteContent } from '@/services/api';
+import type { NearbyAttraction } from '@/types';
+import { Loader2, MapPin } from 'lucide-react';
 import beachImg from '@/assets/beach.jpg';
+import { useEffect, useState } from 'react';
 
 export default function LocationPage() {
+  const [attractions, setAttractions] = useState<NearbyAttraction[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadAttractions() {
+      setLoading(true);
+      setError('');
+      try {
+        const content = await getWebsiteContent();
+        if (!cancelled) setAttractions(content.attractions);
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Unable to load attractions.');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    void loadAttractions();
+    return () => { cancelled = true; };
+  }, []);
+
   return (
     <div className="section-padding">
       <div className="container-wide">
@@ -37,16 +61,28 @@ export default function LocationPage() {
         <div>
           <h2 className="text-title mb-6">Nearby Attractions</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {MOCK_ATTRACTIONS.map(a => (
-              <Card key={a.id} className="p-5 flex items-start gap-4">
+            {loading && (
+              <Card className="p-8 text-center text-sm text-muted-foreground md:col-span-2">
+                <Loader2 className="h-5 w-5 animate-spin mx-auto mb-3" />
+                Loading attractions...
+              </Card>
+            )}
+            {!loading && error && <Card className="p-8 text-center text-sm text-destructive md:col-span-2">{error}</Card>}
+            {!loading && !error && attractions.map(attraction => (
+              <Card key={attraction.id} className="p-5 flex items-start gap-4">
                 <MapPin className="h-5 w-5 text-accent shrink-0 mt-0.5" />
                 <div>
-                  <h3 className="font-semibold text-sm">{a.name}</h3>
-                  <p className="text-xs text-accent font-medium mb-1">{a.distance}</p>
-                  <p className="text-sm text-muted-foreground">{a.description}</p>
+                  <h3 className="font-semibold text-sm">{attraction.name}</h3>
+                  <p className="text-xs text-accent font-medium mb-1">{attraction.distance}</p>
+                  <p className="text-sm text-muted-foreground">{attraction.description}</p>
                 </div>
               </Card>
             ))}
+            {!loading && !error && attractions.length === 0 && (
+              <Card className="p-8 text-center text-sm text-muted-foreground md:col-span-2">
+                Nearby attractions will be added soon.
+              </Card>
+            )}
           </div>
         </div>
       </div>

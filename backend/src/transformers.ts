@@ -99,6 +99,52 @@ export function paymentFromRow(row: DbRow) {
   };
 }
 
+export function faqFromRow(row: DbRow) {
+  return {
+    id: asString(row.id),
+    question: asString(row.question),
+    answer: asString(row.answer),
+    category: asString(row.category),
+    sortOrder: asNumber(row.sort_order),
+  };
+}
+
+export function galleryImageFromRow(row: DbRow) {
+  return {
+    id: asString(row.id),
+    url: asString(row.url),
+    alt: asString(row.alt),
+    category: asString(row.category),
+    sortOrder: asNumber(row.sort_order),
+  };
+}
+
+export function reviewFromRow(row: DbRow) {
+  const date = row.review_date instanceof Date ? row.review_date.toISOString().slice(0, 10) : asString(row.review_date);
+  return {
+    id: asString(row.id),
+    guestName: asString(row.guest_name),
+    rating: asNumber(row.rating),
+    comment: asString(row.comment),
+    date,
+    source: asString(row.source),
+    isFeatured: asBoolean(row.is_featured),
+    sortOrder: asNumber(row.sort_order),
+  };
+}
+
+export function attractionFromRow(row: DbRow) {
+  return {
+    id: asString(row.id),
+    name: asString(row.name),
+    description: asString(row.description),
+    distance: asString(row.distance),
+    image: asString(row.image),
+    category: asString(row.category),
+    sortOrder: asNumber(row.sort_order),
+  };
+}
+
 export function centsToDollars(cents: number): number {
   return Math.round(Number(cents)) / 100;
 }

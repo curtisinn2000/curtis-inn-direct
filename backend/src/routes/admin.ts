@@ -5,17 +5,32 @@ import { asyncHandler, requireAdmin, requireAuth } from '../middleware.js';
 import {
   bulkInventorySchema,
   bulkRatesSchema,
+  attractionWriteSchema,
+  faqWriteSchema,
+  galleryWriteSchema,
+  heroContentSchema,
   rateWriteSchema,
   remainingWriteSchema,
+  reviewWriteSchema,
   roomWriteSchema,
   statusUpdateSchema,
 } from '../schemas.js';
-import { audit, paymentFromRow, reservationFromRow, roomFromRow } from '../transformers.js';
+import {
+  attractionFromRow,
+  audit,
+  faqFromRow,
+  galleryImageFromRow,
+  paymentFromRow,
+  reservationFromRow,
+  reviewFromRow,
+  roomFromRow,
+} from '../transformers.js';
 import { getBookedCount } from '../services/availability.js';
 import { slugify } from '../services/rooms.js';
 import { badRequest, notFound } from '../errors.js';
 import { config } from '../config.js';
 import { addDaysKey, hotelTodayKey } from '../date-utils.js';
+import { getWebsiteContent } from '../services/content.js';
 
 export const adminRouter = Router();
 
@@ -65,6 +80,107 @@ adminRouter.get('/dashboard', asyncHandler(async (_req, res) => {
     revenueToday: row.revenue_today_cents / 100,
     revenueThisMonth: row.revenue_month_cents / 100,
   });
+}));
+
+adminRouter.get('/content', asyncHandler(async (_req, res) => {
+  res.json(await getWebsiteContent(pool, { admin: true }));
+}));
+
+adminRouter.put('/content/hero', asyncHandler(async (req, res) => {
+  const input = heroContentSchema.parse(req.body);
+  await withTransaction(async client => {
+    for (const [key, value] of Object.entries(input)) {
+      await client.query(
+        `insert into website_content_settings(key, value, updated_by, updated_at)
+         values ($1, $2, $3, now())
+         on conflict (key)
+         do update set value = excluded.value, updated_by = excluded.updated_by, updated_at = now()`,
+        [key, value, req.user!.id],
+      );
+    }
+    await audit(client, { actorId: req.user!.id, entity: 'website_content', entityId: 'hero', action: 'update', after: input });
+  });
+  res.json((await getWebsiteContent(pool, { admin: true })).hero);
+}));
+
+adminRouter.post('/content/faqs', asyncHandler(async (req, res) => {
+  const input = faqWriteSchema.parse(req.body);
+  const result = await pool.query(
+    `insert into website_faqs(question, answer, category, sort_order, updated_by)
+     values ($1, $2, $3, $4, $5)
+     returning *`,
+    [input.question, input.answer, input.category, input.sortOrder, req.user!.id],
+  );
+  await audit(pool, { actorId: req.user!.id, entity: 'website_faq', entityId: result.rows[0].id, action: 'create', after: input });
+  res.status(201).json(faqFromRow(result.rows[0]));
+}));
+
+adminRouter.delete('/content/faqs/:id', asyncHandler(async (req, res) => {
+  const id = z.string().uuid().parse(req.params.id);
+  const result = await pool.query(`delete from website_faqs where id = $1 returning *`, [id]);
+  if (!result.rowCount) throw notFound('faq_not_found', 'FAQ item was not found.');
+  await audit(pool, { actorId: req.user!.id, entity: 'website_faq', entityId: id, action: 'delete', before: faqFromRow(result.rows[0]) });
+  res.json({ ok: true });
+}));
+
+adminRouter.post('/content/gallery', asyncHandler(async (req, res) => {
+  const input = galleryWriteSchema.parse(req.body);
+  const result = await pool.query(
+    `insert into website_gallery_images(url, alt, category, sort_order, updated_by)
+     values ($1, $2, $3, $4, $5)
+     returning *`,
+    [input.url, input.alt, input.category, input.sortOrder, req.user!.id],
+  );
+  await audit(pool, { actorId: req.user!.id, entity: 'website_gallery_image', entityId: result.rows[0].id, action: 'create', after: input });
+  res.status(201).json(galleryImageFromRow(result.rows[0]));
+}));
+
+adminRouter.delete('/content/gallery/:id', asyncHandler(async (req, res) => {
+  const id = z.string().uuid().parse(req.params.id);
+  const result = await pool.query(`delete from website_gallery_images where id = $1 returning *`, [id]);
+  if (!result.rowCount) throw notFound('gallery_image_not_found', 'Gallery image was not found.');
+  await audit(pool, { actorId: req.user!.id, entity: 'website_gallery_image', entityId: id, action: 'delete', before: galleryImageFromRow(result.rows[0]) });
+  res.json({ ok: true });
+}));
+
+adminRouter.post('/content/reviews', asyncHandler(async (req, res) => {
+  const input = reviewWriteSchema.parse(req.body);
+  const result = await pool.query(
+    `insert into website_reviews(guest_name, rating, comment, review_date, source, is_featured, sort_order, updated_by)
+     values ($1, $2, $3, $4, $5, $6, $7, $8)
+     returning *`,
+    [input.guestName, input.rating, input.comment, input.date, input.source, input.isFeatured, input.sortOrder, req.user!.id],
+  );
+  await audit(pool, { actorId: req.user!.id, entity: 'website_review', entityId: result.rows[0].id, action: 'create', after: input });
+  res.status(201).json(reviewFromRow(result.rows[0]));
+}));
+
+adminRouter.delete('/content/reviews/:id', asyncHandler(async (req, res) => {
+  const id = z.string().uuid().parse(req.params.id);
+  const result = await pool.query(`delete from website_reviews where id = $1 returning *`, [id]);
+  if (!result.rowCount) throw notFound('review_not_found', 'Review was not found.');
+  await audit(pool, { actorId: req.user!.id, entity: 'website_review', entityId: id, action: 'delete', before: reviewFromRow(result.rows[0]) });
+  res.json({ ok: true });
+}));
+
+adminRouter.post('/content/attractions', asyncHandler(async (req, res) => {
+  const input = attractionWriteSchema.parse(req.body);
+  const result = await pool.query(
+    `insert into website_attractions(name, description, distance, image, category, sort_order, updated_by)
+     values ($1, $2, $3, $4, $5, $6, $7)
+     returning *`,
+    [input.name, input.description, input.distance, input.image, input.category, input.sortOrder, req.user!.id],
+  );
+  await audit(pool, { actorId: req.user!.id, entity: 'website_attraction', entityId: result.rows[0].id, action: 'create', after: input });
+  res.status(201).json(attractionFromRow(result.rows[0]));
+}));
+
+adminRouter.delete('/content/attractions/:id', asyncHandler(async (req, res) => {
+  const id = z.string().uuid().parse(req.params.id);
+  const result = await pool.query(`delete from website_attractions where id = $1 returning *`, [id]);
+  if (!result.rowCount) throw notFound('attraction_not_found', 'Attraction was not found.');
+  await audit(pool, { actorId: req.user!.id, entity: 'website_attraction', entityId: id, action: 'delete', before: attractionFromRow(result.rows[0]) });
+  res.json({ ok: true });
 }));
 
 adminRouter.get('/rooms', asyncHandler(async (_req, res) => {

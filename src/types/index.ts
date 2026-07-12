@@ -182,8 +182,9 @@ export interface PromoCode {
 export interface PropertyContent {
   heroTitle: string;
   heroSubtitle: string;
-  heroImages: string[];
-  aboutText: string;
+  heroDescription: string;
+  heroImages?: string[];
+  aboutText?: string;
 }
 
 export interface Amenity {
@@ -219,6 +220,15 @@ export interface Review {
   date: string;
   source: string;
   isFeatured: boolean;
+  sortOrder?: number;
+}
+
+export interface WebsiteContent {
+  hero: PropertyContent;
+  faqs: FAQ[];
+  gallery: GalleryImage[];
+  reviews: Review[];
+  attractions: NearbyAttraction[];
 }
 
 // --- Admin ---
