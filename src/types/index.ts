@@ -15,9 +15,12 @@ export type PaymentStatus =
   | 'deposit_paid'
   | 'paid'
   | 'refunded'
-  | 'partial_refund';
+  | 'partial_refund'
+  | 'failed';
 
 export type PaymentMethod =
+  | 'stripe_pay_now'
+  // Legacy values can still appear on historical reservations.
   | 'clover_pay_now'
   | 'pay_at_property'
   | 'clover_deposit';
@@ -96,6 +99,8 @@ export interface Payment {
   amount: number;
   method: PaymentMethod;
   status: PaymentStatus;
+  stripeCheckoutSessionId?: string;
+  stripePaymentIntentId?: string;
   cloverTransactionRef?: string;
   createdAt: string;
   updatedAt: string;

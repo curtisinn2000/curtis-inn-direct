@@ -19,7 +19,7 @@ export const MOCK_FAQS: FAQ[] = [
   { id: '6', question: 'What is your cancellation policy?', answer: 'Free cancellation up to 48 hours before check-in. Cancellations within 48 hours may be subject to a one-night charge.', category: 'Policies', sortOrder: 6 },
   { id: '7', question: 'Do you have a pool?', answer: 'Yes! We have a beautiful outdoor pool available to all guests during daylight hours.', category: 'Amenities', sortOrder: 7 },
   { id: '8', question: 'Is Wi-Fi available?', answer: 'Yes, complimentary high-speed Wi-Fi is available throughout the property.', category: 'Amenities', sortOrder: 8 },
-  { id: '9', question: 'What payment methods do you accept?', answer: 'We accept all major credit cards through our secure Clover payment system. You can also choose to reserve now and pay at the property.', category: 'Payments', sortOrder: 9 },
+  { id: '9', question: 'What payment methods do you accept?', answer: 'We accept all major credit cards through our secure Stripe payment system.', category: 'Payments', sortOrder: 9 },
   { id: '10', question: 'Is there an age requirement to check in?', answer: 'Yes, guests must be at least 21 years old to check in. A valid government-issued photo ID is required.', category: 'Policies', sortOrder: 10 },
 ];
 
@@ -45,7 +45,7 @@ export const MOCK_RESERVATIONS: Reservation[] = [
     checkIn: '2024-12-20', checkOut: '2024-12-23', nights: 3, guests: 2, rooms: 1,
     guest: { firstName: 'John', lastName: 'Anderson', email: 'john@example.com', phone: '(305) 555-1234' },
     specialRequests: 'Late check-in around 9 PM', arrivalTime: '9:00 PM',
-    status: 'confirmed', paymentStatus: 'paid', paymentMethod: 'clover_pay_now',
+    status: 'confirmed', paymentStatus: 'paid', paymentMethod: 'stripe_pay_now',
     totalAmount: 369.69, taxAmount: 42.51, depositAmount: 0, source: 'direct_website',
     notes: ['Guest called to confirm late arrival'], addedToMotelPro: true,
     createdAt: '2024-12-10T14:30:00Z', updatedAt: '2024-12-10T14:30:00Z',
@@ -55,7 +55,7 @@ export const MOCK_RESERVATIONS: Reservation[] = [
     checkIn: '2024-12-21', checkOut: '2024-12-26', nights: 5, guests: 5, rooms: 1,
     guest: { firstName: 'Sarah', lastName: 'Williams', email: 'sarah@example.com', phone: '(954) 555-5678' },
     specialRequests: 'Extra towels please', arrivalTime: '4:00 PM',
-    status: 'confirmed', paymentStatus: 'deposit_paid', paymentMethod: 'clover_deposit',
+    status: 'confirmed', paymentStatus: 'paid', paymentMethod: 'stripe_pay_now',
     totalAmount: 1237.35, taxAmount: 142.35, depositAmount: 219,  source: 'direct_website',
     notes: [], addedToMotelPro: false,
     createdAt: '2024-12-12T09:15:00Z', updatedAt: '2024-12-12T09:15:00Z',
@@ -65,7 +65,7 @@ export const MOCK_RESERVATIONS: Reservation[] = [
     checkIn: '2024-12-22', checkOut: '2024-12-24', nights: 2, guests: 1, rooms: 1,
     guest: { firstName: 'Michael', lastName: 'Chen', email: 'mchen@example.com', phone: '(786) 555-9012' },
     specialRequests: '', arrivalTime: '3:00 PM',
-    status: 'pending', paymentStatus: 'unpaid', paymentMethod: 'pay_at_property',
+    status: 'confirmed', paymentStatus: 'paid', paymentMethod: 'stripe_pay_now',
     totalAmount: 178.54, taxAmount: 20.54, depositAmount: 0, source: 'direct_website',
     notes: ['Awaiting confirmation call'], addedToMotelPro: false,
     createdAt: '2024-12-15T18:45:00Z', updatedAt: '2024-12-15T18:45:00Z',
@@ -73,8 +73,8 @@ export const MOCK_RESERVATIONS: Reservation[] = [
 ];
 
 export const MOCK_PAYMENTS: Payment[] = [
-  { id: 'pay-001', reservationId: 'res-001', confirmationNumber: 'CIS-2024-001', guestName: 'John Anderson', amount: 369.69, method: 'clover_pay_now', status: 'paid', cloverTransactionRef: 'CLV-TXN-12345', createdAt: '2024-12-10T14:32:00Z', updatedAt: '2024-12-10T14:32:00Z' },
-  { id: 'pay-002', reservationId: 'res-002', confirmationNumber: 'CIS-2024-002', guestName: 'Sarah Williams', amount: 219, method: 'clover_deposit', status: 'deposit_paid', cloverTransactionRef: 'CLV-TXN-12346', createdAt: '2024-12-12T09:20:00Z', updatedAt: '2024-12-12T09:20:00Z' },
+  { id: 'pay-001', reservationId: 'res-001', confirmationNumber: 'CIS-2024-001', guestName: 'John Anderson', amount: 369.69, method: 'stripe_pay_now', status: 'paid', stripePaymentIntentId: 'pi_mock_12345', createdAt: '2024-12-10T14:32:00Z', updatedAt: '2024-12-10T14:32:00Z' },
+  { id: 'pay-002', reservationId: 'res-002', confirmationNumber: 'CIS-2024-002', guestName: 'Sarah Williams', amount: 219, method: 'stripe_pay_now', status: 'paid', stripePaymentIntentId: 'pi_mock_12346', createdAt: '2024-12-12T09:20:00Z', updatedAt: '2024-12-12T09:20:00Z' },
 ];
 
 export const MOCK_PROMO_CODES: PromoCode[] = [

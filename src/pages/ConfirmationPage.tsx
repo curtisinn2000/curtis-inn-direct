@@ -7,16 +7,18 @@ import { CheckCircle, Phone, Mail, MapPin, Printer } from 'lucide-react';
 export default function ConfirmationPage() {
   const [params] = useSearchParams();
   const conf = params.get('conf') || 'CIS-000000';
+  const status = params.get('status') || '';
   const roomName = params.get('room') || '';
   const checkIn = params.get('checkIn') || '';
   const checkOut = params.get('checkOut') || '';
-  const method = params.get('method') || '';
   const total = params.get('total') || '0';
   const guestName = params.get('guest')?.replace('+', ' ') || '';
 
-  const statusLabel = method === 'pay_at_property'
-    ? { title: 'Reservation Request Received', color: 'text-warning', desc: 'Your reservation request has been received. The property will confirm your booking shortly.' }
-    : { title: 'Booking Confirmed', color: 'text-success', desc: 'Your booking is confirmed and payment has been processed securely.' };
+  const statusLabel = status === 'payment_cancelled'
+    ? { title: 'Payment Not Completed', color: 'text-warning', desc: 'Your reservation is pending because payment was not completed. Please contact the property if you need help finishing your booking.' }
+    : status === 'success'
+      ? { title: 'Payment Received', color: 'text-success', desc: 'Stripe received your payment. Your reservation will be confirmed as soon as the payment notification is processed.' }
+      : { title: 'Reservation Received', color: 'text-warning', desc: 'Your reservation request has been received. The property will confirm your booking shortly.' };
 
   return (
     <div className="section-padding">
@@ -36,25 +38,25 @@ export default function ConfirmationPage() {
               </div>
               <div>
                 <p className="text-xs text-muted-foreground uppercase tracking-wider">Guest</p>
-                <p className="font-medium">{guestName}</p>
+                <p className="font-medium">{guestName || 'Provided during booking'}</p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground uppercase tracking-wider">Room</p>
-                <p className="font-medium">{roomName}</p>
+                <p className="font-medium">{roomName || 'See reservation record'}</p>
               </div>
             </div>
             <div className="space-y-4">
               <div>
                 <p className="text-xs text-muted-foreground uppercase tracking-wider">Check-in</p>
-                <p className="font-medium">{checkIn} at {PROPERTY.checkIn}</p>
+                <p className="font-medium">{checkIn ? `${checkIn} at ${PROPERTY.checkIn}` : 'See reservation record'}</p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground uppercase tracking-wider">Check-out</p>
-                <p className="font-medium">{checkOut} at {PROPERTY.checkOut}</p>
+                <p className="font-medium">{checkOut ? `${checkOut} at ${PROPERTY.checkOut}` : 'See reservation record'}</p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground uppercase tracking-wider">Total</p>
-                <p className="text-xl font-bold">${Number(total).toFixed(2)}</p>
+                <p className="text-xl font-bold">{Number(total) > 0 ? `$${Number(total).toFixed(2)}` : 'See Stripe receipt'}</p>
               </div>
             </div>
           </div>
@@ -63,7 +65,7 @@ export default function ConfirmationPage() {
 
           <div>
             <p className="text-sm text-muted-foreground mb-4">
-              A confirmation email has been sent to your email address. Please keep your confirmation number for your records.
+              Please keep your confirmation number for your records. Stripe will provide payment receipt details when payment is completed.
             </p>
             <div className="flex flex-col sm:flex-row gap-3">
               <Button variant="outline" size="sm" onClick={() => window.print()}>

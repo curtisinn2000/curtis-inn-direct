@@ -39,6 +39,7 @@ const paymentLabel: Record<string, string> = {
   deposit_paid: 'Deposit Paid',
   refunded: 'Refunded',
   partial_refund: 'Partial Refund',
+  failed: 'Failed',
 };
 
 interface ReservationLookupModalProps {

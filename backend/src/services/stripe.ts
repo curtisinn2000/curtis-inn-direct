@@ -1,0 +1,185 @@
+import Stripe from 'stripe';
+import type { DbClient } from '../db.js';
+import { config, stripeConfigured } from '../config.js';
+import { configurationError, notFound } from '../errors.js';
+import { audit } from '../transformers.js';
+
+let stripeClient: Stripe | null = null;
+
+export function getStripeClient() {
+  if (!stripeConfigured) {
+    throw configurationError('Stripe is not configured. Set STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET.');
+  }
+  if (!stripeClient) {
+    stripeClient = new Stripe(config.STRIPE_SECRET_KEY);
+  }
+  return stripeClient;
+}
+
+export async function createStripeCheckoutSession(db: DbClient, reservationId: string) {
+  const result = await db.query(
+    `select
+       p.id as payment_id,
+       p.amount_cents,
+       p.status as payment_row_status,
+       r.id as reservation_id,
+       r.confirmation_number,
+       r.guest_email,
+       r.guest_first_name,
+       r.guest_last_name,
+       r.check_in,
+       r.check_out,
+       rt.name as room_type_name
+     from payments p
+     join reservations r on r.id = p.reservation_id
+     join room_types rt on rt.id = r.room_type_id
+     where p.reservation_id = $1
+       and p.provider = 'stripe'
+       and p.status = 'unpaid'
+     order by p.created_at desc
+     limit 1`,
+    [reservationId],
+  );
+
+  if (!result.rowCount) {
+    throw notFound('payment_not_found', 'No unpaid Stripe payment was found for this reservation.');
+  }
+
+  const row = result.rows[0];
+  const stripe = getStripeClient();
+  const successUrl = `${config.PUBLIC_SITE_URL}/booking/confirmation?conf=${encodeURIComponent(row.confirmation_number)}&session_id={CHECKOUT_SESSION_ID}&status=success`;
+  const cancelUrl = `${config.PUBLIC_SITE_URL}/booking/confirmation?conf=${encodeURIComponent(row.confirmation_number)}&status=payment_cancelled`;
+  const description = `${row.check_in} to ${row.check_out}`;
+  const guestName = `${row.guest_first_name} ${row.guest_last_name}`.trim();
+
+  const session = await stripe.checkout.sessions.create({
+    mode: 'payment',
+    payment_method_types: ['card'],
+    customer_email: row.guest_email,
+    client_reference_id: row.reservation_id,
+    success_url: successUrl,
+    cancel_url: cancelUrl,
+    line_items: [
+      {
+        quantity: 1,
+        price_data: {
+          currency: 'usd',
+          unit_amount: Number(row.amount_cents),
+          product_data: {
+            name: `Curtis Inn reservation ${row.confirmation_number}`,
+            description: `${row.room_type_name} - ${description}`,
+          },
+        },
+      },
+    ],
+    metadata: {
+      reservationId: row.reservation_id,
+      paymentId: row.payment_id,
+      confirmationNumber: row.confirmation_number,
+      guestName,
+    },
+    payment_intent_data: {
+      metadata: {
+        reservationId: row.reservation_id,
+        paymentId: row.payment_id,
+        confirmationNumber: row.confirmation_number,
+      },
+    },
+  });
+
+  await db.query(
+    `update payments
+     set stripe_checkout_session_id = $1, updated_at = now()
+     where id = $2`,
+    [session.id, row.payment_id],
+  );
+
+  return {
+    sessionId: session.id,
+    sessionUrl: session.url,
+  };
+}
+
+export async function fulfillStripeCheckoutSession(db: DbClient, session: Stripe.Checkout.Session) {
+  const reservationId = session.metadata?.reservationId ?? session.client_reference_id;
+  const paymentId = session.metadata?.paymentId;
+
+  if (!reservationId || !paymentId) {
+    throw new Error(`Stripe session ${session.id} is missing reservation metadata.`);
+  }
+
+  const paymentStatus = session.payment_status === 'paid' ? 'paid' : 'unpaid';
+  const reservationStatus = paymentStatus === 'paid' ? 'confirmed' : 'pending';
+  const paymentIntentId = typeof session.payment_intent === 'string'
+    ? session.payment_intent
+    : session.payment_intent?.id ?? null;
+
+  const payment = await db.query(
+    `update payments
+     set status = $1,
+         stripe_checkout_session_id = $2,
+         stripe_payment_intent_id = coalesce($3, stripe_payment_intent_id),
+         updated_at = now()
+     where id = $4
+       and reservation_id = $5
+       and provider = 'stripe'
+     returning status`,
+    [paymentStatus, session.id, paymentIntentId, paymentId, reservationId],
+  );
+
+  if (!payment.rowCount) {
+    throw notFound('payment_not_found', 'Stripe payment record was not found.');
+  }
+
+  const reservation = await db.query(
+    `update reservations
+     set status = $1,
+         payment_status = $2,
+         updated_at = now()
+     where id = $3
+     returning confirmation_number`,
+    [reservationStatus, paymentStatus, reservationId],
+  );
+
+  if (!reservation.rowCount) {
+    throw notFound('reservation_not_found', 'Reservation was not found for Stripe session.');
+  }
+
+  await audit(db, {
+    entity: 'payment',
+    entityId: paymentId,
+    action: paymentStatus === 'paid' ? 'stripe_paid' : 'stripe_session_completed_unpaid',
+    after: {
+      reservationId,
+      stripeCheckoutSessionId: session.id,
+      stripePaymentIntentId: paymentIntentId,
+      paymentStatus,
+      reservationStatus,
+    },
+  });
+}
+
+export async function markStripeSessionFailed(db: DbClient, session: Stripe.Checkout.Session, action: string) {
+  const reservationId = session.metadata?.reservationId ?? session.client_reference_id;
+  const paymentId = session.metadata?.paymentId;
+  if (!reservationId || !paymentId) return;
+
+  await db.query(
+    `update payments
+     set status = 'failed',
+         stripe_checkout_session_id = $1,
+         updated_at = now()
+     where id = $2
+       and reservation_id = $3
+       and provider = 'stripe'
+       and status = 'unpaid'`,
+    [session.id, paymentId, reservationId],
+  );
+
+  await audit(db, {
+    entity: 'payment',
+    entityId: paymentId,
+    action,
+    after: { reservationId, stripeCheckoutSessionId: session.id },
+  });
+}

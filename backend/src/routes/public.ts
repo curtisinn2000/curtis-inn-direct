@@ -1,0 +1,93 @@
+import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
+import { pool } from '../db.js';
+import { asyncHandler } from '../middleware.js';
+import {
+  availabilitySearchSchema,
+  createReservationSchema,
+  lookupReservationSchema,
+  validatePromoSchema,
+} from '../schemas.js';
+import { getActiveRooms, getRoomBySlug } from '../services/rooms.js';
+import { searchAvailability } from '../services/availability.js';
+import { createReservation, lookupReservation } from '../services/reservations.js';
+import { notFound } from '../errors.js';
+
+export const publicRouter = Router();
+
+const publicWriteLimiter = rateLimit({
+  windowMs: 60_000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+publicRouter.get('/health', (_req, res) => {
+  res.json({ ok: true, service: 'curtis-inn-backend' });
+});
+
+publicRouter.get('/rooms', asyncHandler(async (_req, res) => {
+  res.json(await getActiveRooms(pool));
+}));
+
+publicRouter.get('/rooms/:slug', asyncHandler(async (req, res) => {
+  const room = await getRoomBySlug(pool, String(req.params.slug));
+  if (!room) throw notFound('room_not_found', 'Room type was not found.');
+  res.json(room);
+}));
+
+publicRouter.post('/availability/search', asyncHandler(async (req, res) => {
+  const input = availabilitySearchSchema.parse(req.body);
+  res.json(await searchAvailability(pool, input));
+}));
+
+publicRouter.post('/reservations', publicWriteLimiter, asyncHandler(async (req, res) => {
+  const parsed = createReservationSchema.parse(req.body);
+  const roomSlug = parsed.roomSlug ?? parsed.selectedRoom?.roomType.slug;
+  const reservation = await createReservation({
+    idempotencyKey: parsed.idempotencyKey,
+    roomTypeId: parsed.roomTypeId,
+    roomSlug,
+    search: parsed.search,
+    guestInfo: parsed.guestInfo,
+    specialRequests: parsed.specialRequests,
+    arrivalTime: parsed.arrivalTime,
+    paymentMethod: parsed.paymentMethod,
+    promoCode: parsed.promoCode,
+  });
+  res.status(201).json(reservation);
+}));
+
+publicRouter.post('/reservations/lookup', publicWriteLimiter, asyncHandler(async (req, res) => {
+  const input = lookupReservationSchema.parse(req.body);
+  const result = await lookupReservation(pool, input.confirmationNumber, input.lastName);
+  res.json(result);
+}));
+
+publicRouter.post('/promo/validate', asyncHandler(async (req, res) => {
+  const input = validatePromoSchema.parse(req.body);
+  const result = await pool.query(
+    `select * from promo_codes
+     where lower(code) = lower($1)
+       and is_active = true
+       and (valid_from is null or valid_from <= current_date)
+       and (valid_to is null or valid_to >= current_date)
+       and (max_uses is null or uses < max_uses)`,
+    [input.code],
+  );
+
+  if (!result.rowCount) return res.json(null);
+  const row = result.rows[0];
+  res.json({
+    id: row.id,
+    code: row.code,
+    description: row.description,
+    discountType: row.kind === 'percent' ? 'percentage' : 'fixed',
+    discountValue: row.kind === 'percent' ? row.value : row.value / 100,
+    validFrom: row.valid_from,
+    validTo: row.valid_to,
+    maxUses: row.max_uses,
+    currentUses: row.uses,
+    isActive: row.is_active,
+  });
+}));

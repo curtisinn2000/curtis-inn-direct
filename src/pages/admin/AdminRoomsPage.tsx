@@ -12,8 +12,8 @@ import roomFallback from '@/assets/room-king.jpg';
 
 export default function AdminRoomsPage() {
   const { toast } = useToast();
-  const roomTypesMap = useInventoryStore(s => s.roomTypes);
-  const rooms = useMemo(() => listRoomTypes({ roomTypes: roomTypesMap } as any), [roomTypesMap]);
+  const state = useInventoryStore();
+  const rooms = useMemo(() => listRoomTypes(state), [state]);
   const upsertRoomType = useInventoryStore(s => s.upsertRoomType);
   const addRoomType = useInventoryStore(s => s.addRoomType);
   const deleteRoomType = useInventoryStore(s => s.deleteRoomType);

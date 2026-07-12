@@ -5,16 +5,28 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card } from '@/components/ui/card';
 import { PROPERTY } from '@/config/constants';
+import { apiRequest, jsonBody, setAdminToken } from '@/services/client';
 
 export default function AdminLoginPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    await new Promise(r => setTimeout(r, 800));
-    navigate('/admin');
+    setError('');
+    try {
+      const result = await apiRequest<{ token: string }>('/auth/login', jsonBody({ email, password }));
+      setAdminToken(result.token);
+      navigate('/admin');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to sign in.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -25,13 +37,13 @@ export default function AdminLoginPage() {
           <p className="text-sm text-muted-foreground">Admin Portal</p>
         </div>
         <form onSubmit={handleLogin} className="space-y-4">
-          <div><Label>Email</Label><Input type="email" defaultValue="admin@curtisinnsuites.com" required /></div>
-          <div><Label>Password</Label><Input type="password" defaultValue="password" required /></div>
+          <div><Label>Email</Label><Input type="email" value={email} onChange={e => setEmail(e.target.value)} required /></div>
+          <div><Label>Password</Label><Input type="password" value={password} onChange={e => setPassword(e.target.value)} required /></div>
+          {error && <p className="text-sm text-destructive">{error}</p>}
           <Button type="submit" className="w-full" disabled={loading}>
             {loading ? 'Signing in...' : 'Sign In'}
           </Button>
         </form>
-        <p className="text-xs text-muted-foreground text-center mt-4">Mock login — no authentication configured</p>
       </Card>
     </div>
   );

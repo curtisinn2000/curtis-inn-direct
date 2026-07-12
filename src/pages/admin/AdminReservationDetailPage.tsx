@@ -1,6 +1,7 @@
 import { useParams, Link } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { getReservationById } from '@/services/api';
+import { updateReservationStatus } from '@/services/api';
 import type { Reservation } from '@/types';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -25,6 +26,12 @@ export default function AdminReservationDetailPage() {
     { label: 'Cancel', icon: XCircle, status: 'cancelled' as const, variant: 'destructive' as const },
     { label: 'No-Show', icon: Clock, status: 'no_show' as const, variant: 'destructive' as const },
   ];
+
+  const runStatusAction = async (status: Reservation['status']) => {
+    if (!res) return;
+    const updated = await updateReservationStatus(res.id, status);
+    setRes(updated);
+  };
 
   return (
     <div>
@@ -117,7 +124,7 @@ export default function AdminReservationDetailPage() {
             <h3 className="font-semibold mb-4">Actions</h3>
             <div className="space-y-2">
               {actions.map(a => (
-                <Button key={a.label} variant={a.variant || 'outline'} size="sm" className="w-full justify-start">
+                <Button key={a.label} variant={a.variant || 'outline'} size="sm" className="w-full justify-start" onClick={() => runStatusAction(a.status)}>
                   <a.icon className="mr-2 h-4 w-4" /> {a.label}
                 </Button>
               ))}

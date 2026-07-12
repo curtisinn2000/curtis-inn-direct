@@ -1,18 +1,21 @@
 import { useEffect, useState } from 'react';
 import { Card } from '@/components/ui/card';
-import { getDashboardStats } from '@/services/api';
-import type { DashboardStats } from '@/types';
-import { MOCK_RESERVATIONS, MOCK_PAYMENTS } from '@/data/mock-data';
+import { getDashboardStats, getPayments, getReservations } from '@/services/api';
+import type { DashboardStats, Payment, Reservation } from '@/types';
 import { Badge } from '@/components/ui/badge';
 import { ArrowUpRight, Users, BedDouble, DollarSign, CalendarDays, Clock, TrendingUp, Loader2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getDashboardStats().then(s => { setStats(s); setLoading(false); });
+    Promise.all([getDashboardStats(), getReservations(), getPayments()])
+      .then(([s, r, p]) => { setStats(s); setReservations(r); setPayments(p); })
+      .finally(() => setLoading(false));
   }, []);
 
   if (loading || !stats) {
@@ -59,7 +62,7 @@ export default function AdminDashboard() {
             <Link to="/admin/reservations" className="text-xs text-accent hover:underline flex items-center gap-1">View all <ArrowUpRight className="h-3 w-3" /></Link>
           </div>
           <div className="space-y-3">
-            {MOCK_RESERVATIONS.slice(0, 5).map(res => (
+            {reservations.slice(0, 5).map(res => (
               <Link key={res.id} to={`/admin/reservations/${res.id}`} className="flex items-center justify-between p-3 rounded-lg hover:bg-muted transition-colors">
                 <div>
                   <p className="text-sm font-medium">{res.guest.firstName} {res.guest.lastName}</p>
@@ -80,7 +83,7 @@ export default function AdminDashboard() {
             <Link to="/admin/payments" className="text-xs text-accent hover:underline flex items-center gap-1">View all <ArrowUpRight className="h-3 w-3" /></Link>
           </div>
           <div className="space-y-3">
-            {MOCK_PAYMENTS.map(pay => (
+            {payments.slice(0, 5).map(pay => (
               <div key={pay.id} className="flex items-center justify-between p-3 rounded-lg hover:bg-muted transition-colors">
                 <div>
                   <p className="text-sm font-medium">{pay.guestName}</p>

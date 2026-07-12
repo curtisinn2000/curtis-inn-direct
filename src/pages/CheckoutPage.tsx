@@ -9,8 +9,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { MOCK_ROOMS } from '@/data/mock-rooms';
 import { useInventoryStore, getRoomBySlug } from '@/store/inventoryStore';
 import { PROPERTY } from '@/config/constants';
-import type { PaymentMethod, GuestInfo } from '@/types';
-import { Shield, CreditCard, Clock, Loader2, ArrowLeft, Lock } from 'lucide-react';
+import type { PaymentMethod, GuestInfo, BookingFormData } from '@/types';
+import { createReservation, createStripeCheckoutSession } from '@/services/api';
+import { CreditCard, Loader2, ArrowLeft, Lock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export default function CheckoutPage() {
@@ -28,13 +29,15 @@ export default function CheckoutPage() {
   const taxes = Number(searchParams.get('taxes')) || 0;
   const checkIn = searchParams.get('checkIn') || '';
   const checkOut = searchParams.get('checkOut') || '';
+  const guests = Number(searchParams.get('guests')) || 1;
+  const rooms = Number(searchParams.get('rooms')) || 1;
 
   const [step, setStep] = useState<'details' | 'payment'>('details');
   const [guest, setGuest] = useState<GuestInfo>({ firstName: '', lastName: '', email: '', phone: '' });
   const [specialRequests, setSpecialRequests] = useState('');
   const [arrivalTime, setArrivalTime] = useState('3:00 PM');
   const [agreed, setAgreed] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('clover_pay_now');
+  const paymentMethod: PaymentMethod = 'stripe_pay_now';
   const [submitting, setSubmitting] = useState(false);
 
   if (!room) {
@@ -48,16 +51,53 @@ export default function CheckoutPage() {
 
   const handleSubmit = async () => {
     setSubmitting(true);
-    await new Promise(r => setTimeout(r, 1500));
-    const confNum = `CIS-${Date.now().toString().slice(-6)}`;
-    navigate(`/booking/confirmation?conf=${confNum}&room=${room.name}&checkIn=${checkIn}&checkOut=${checkOut}&method=${paymentMethod}&total=${total}&guest=${guest.firstName}+${guest.lastName}`);
-  };
+    try {
+      const payload: BookingFormData = {
+        search: { checkIn, checkOut, guests, rooms },
+        selectedRoom: {
+          roomType: {
+            id: room.id,
+            slug: room.slug,
+            name: room.name,
+            shortDescription: '',
+            longDescription: '',
+            occupancy: guests,
+            bedType: '',
+            images: [],
+            amenities: [],
+            policies: [],
+            basePrice: room.basePrice,
+            taxRate: 0,
+            isActive: true,
+            inventoryCount: rooms,
+            cancellationTerms: '',
+            sortOrder: 0,
+          },
+          available: rooms,
+          nightlyRate: Math.max(0, (total - taxes) / nights),
+          totalRate: total - taxes,
+          taxes,
+          grandTotal: total,
+          nights,
+        },
+        guestInfo: guest,
+        specialRequests,
+        arrivalTime,
+        paymentMethod,
+        agreedToPolicies: agreed,
+      };
 
-  const paymentOptions: { method: PaymentMethod; title: string; desc: string; icon: React.ElementType }[] = [
-    { method: 'clover_pay_now', title: 'Pay Now', desc: 'Secure payment via Clover. Your card is never stored by us.', icon: CreditCard },
-    { method: 'pay_at_property', title: 'Reserve Now, Pay at Property', desc: 'No payment required now. Pay upon arrival at the front desk.', icon: Clock },
-    { method: 'clover_deposit', title: 'Deposit & Guarantee', desc: 'Secure your reservation with a one-night deposit via Clover.', icon: Shield },
-  ];
+      const reservation = await createReservation(payload);
+
+      const session = await createStripeCheckoutSession(reservation.id);
+      window.location.href = session.sessionUrl;
+    } catch (error) {
+      console.error(error);
+      alert(error instanceof Error ? error.message : 'Unable to complete reservation.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <div className="section-padding">
@@ -125,39 +165,26 @@ export default function CheckoutPage() {
             {step === 'payment' && (
               <Card className="p-6 space-y-5">
                 <h2 className="text-title">Payment Method</h2>
-                <div className="space-y-3">
-                  {paymentOptions.map(opt => (
-                    <button
-                      key={opt.method}
-                      onClick={() => setPaymentMethod(opt.method)}
-                      className={cn(
-                        'w-full text-left p-4 rounded-lg border-2 transition-all',
-                        paymentMethod === opt.method ? 'border-accent bg-accent/5' : 'border-border hover:border-muted-foreground/30'
-                      )}
-                    >
-                      <div className="flex items-start gap-3">
-                        <opt.icon className={cn('h-5 w-5 mt-0.5 shrink-0', paymentMethod === opt.method ? 'text-accent' : 'text-muted-foreground')} />
-                        <div>
-                          <p className="font-medium text-sm">{opt.title}</p>
-                          <p className="text-xs text-muted-foreground mt-0.5">{opt.desc}</p>
-                        </div>
-                      </div>
-                    </button>
-                  ))}
+                <div className="w-full text-left p-4 rounded-lg border-2 border-accent bg-accent/5">
+                  <div className="flex items-start gap-3">
+                    <CreditCard className="h-5 w-5 mt-0.5 shrink-0 text-accent" />
+                    <div>
+                      <p className="font-medium text-sm">Pay Now</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">Secure payment via Stripe. Your card is never stored by us.</p>
+                    </div>
+                  </div>
                 </div>
 
-                {paymentMethod === 'clover_pay_now' && (
-                  <div className="p-4 rounded-lg bg-muted text-sm text-muted-foreground flex items-center gap-2">
-                    <Lock className="h-4 w-4 shrink-0" />
-                    You will be redirected to Clover's secure payment page. Your card details are never stored by {PROPERTY.name}.
-                  </div>
-                )}
+                <div className="p-4 rounded-lg bg-muted text-sm text-muted-foreground flex items-center gap-2">
+                  <Lock className="h-4 w-4 shrink-0" />
+                  You will be redirected to Stripe's secure payment page. Your card details are never stored by {PROPERTY.name}.
+                </div>
 
                 <div className="flex gap-3">
                   <Button variant="outline" onClick={() => setStep('details')} disabled={submitting} className="flex-1">Back</Button>
                   <Button onClick={handleSubmit} disabled={submitting} className="flex-1 bg-accent text-accent-foreground hover:bg-accent/90" size="lg">
                     {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                    {paymentMethod === 'pay_at_property' ? 'Complete Reservation' : 'Proceed to Payment'}
+                    Proceed to Payment
                   </Button>
                 </div>
               </Card>

@@ -4,8 +4,9 @@ import {
   LayoutDashboard, CalendarDays, BedDouble, DollarSign,
   CreditCard, FileText, BarChart3, Settings, LogOut, Menu
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { apiRequest, setAdminToken } from '@/services/client';
 
 const adminNav = [
   { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
@@ -23,11 +24,30 @@ export function AdminLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    apiRequest('/auth/me')
+      .then(() => { if (!cancelled) setCheckingAuth(false); })
+      .catch(() => {
+        if (!cancelled) {
+          setAdminToken(null);
+          navigate('/admin/login', { replace: true });
+        }
+      });
+    return () => { cancelled = true; };
+  }, [navigate]);
 
   const isActive = (href: string) =>
     href === '/admin'
       ? location.pathname === '/admin'
       : location.pathname.startsWith(href);
+
+  const signOut = () => {
+    setAdminToken(null);
+    navigate('/admin/login');
+  };
 
   const sidebar = (
     <nav className="flex flex-col h-full">
@@ -59,7 +79,7 @@ export function AdminLayout() {
 
       <div className="p-3 border-t border-sidebar-border">
         <button
-          onClick={() => navigate('/admin/login')}
+          onClick={signOut}
           className="flex items-center gap-3 px-3 py-2.5 text-sm text-sidebar-foreground/70 hover:text-sidebar-foreground rounded-md w-full transition-colors"
         >
           <LogOut className="h-4 w-4" />
@@ -69,14 +89,20 @@ export function AdminLayout() {
     </nav>
   );
 
+  if (checkingAuth) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-muted/30 text-sm text-muted-foreground">
+        Checking admin session...
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex bg-muted/30">
-      {/* Mobile overlay */}
       {sidebarOpen && (
         <div className="fixed inset-0 z-40 bg-foreground/50 lg:hidden" onClick={() => setSidebarOpen(false)} />
       )}
 
-      {/* Sidebar */}
       <aside className={cn(
         'fixed lg:sticky top-0 left-0 z-50 h-screen w-64 bg-sidebar shrink-0 transition-transform lg:translate-x-0',
         sidebarOpen ? 'translate-x-0' : '-translate-x-full'
@@ -84,7 +110,6 @@ export function AdminLayout() {
         {sidebar}
       </aside>
 
-      {/* Main */}
       <div className="flex-1 min-w-0">
         <header className="sticky top-0 z-30 h-14 bg-card border-b flex items-center px-4 gap-3">
           <Button
