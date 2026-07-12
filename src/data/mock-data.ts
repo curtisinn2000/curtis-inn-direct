@@ -43,7 +43,7 @@ export const MOCK_RESERVATIONS: Reservation[] = [
   {
     id: 'res-001', confirmationNumber: 'CIS-2024-001', roomTypeId: 'king-room', roomTypeName: 'King Room',
     checkIn: '2024-12-20', checkOut: '2024-12-23', nights: 3, guests: 2, rooms: 1,
-    guest: { firstName: 'John', lastName: 'Anderson', email: 'john@example.com', phone: '(305) 555-1234' },
+    guest: { firstName: 'John', lastName: 'Anderson', email: 'curtisinn200@gmail.com', phone: '(305) 555-1234' },
     specialRequests: 'Late check-in around 9 PM', arrivalTime: '9:00 PM',
     status: 'confirmed', paymentStatus: 'paid', paymentMethod: 'stripe_pay_now',
     totalAmount: 369.69, taxAmount: 42.51, depositAmount: 0, source: 'direct_website',
@@ -53,7 +53,7 @@ export const MOCK_RESERVATIONS: Reservation[] = [
   {
     id: 'res-002', confirmationNumber: 'CIS-2024-002', roomTypeId: 'two-bedroom-suite', roomTypeName: 'Two-Bedroom Suite',
     checkIn: '2024-12-21', checkOut: '2024-12-26', nights: 5, guests: 5, rooms: 1,
-    guest: { firstName: 'Sarah', lastName: 'Williams', email: 'sarah@example.com', phone: '(954) 555-5678' },
+    guest: { firstName: 'Sarah', lastName: 'Williams', email: 'curtisinn200@gmail.com', phone: '(954) 555-5678' },
     specialRequests: 'Extra towels please', arrivalTime: '4:00 PM',
     status: 'confirmed', paymentStatus: 'paid', paymentMethod: 'stripe_pay_now',
     totalAmount: 1237.35, taxAmount: 142.35, depositAmount: 219,  source: 'direct_website',
@@ -63,7 +63,7 @@ export const MOCK_RESERVATIONS: Reservation[] = [
   {
     id: 'res-003', confirmationNumber: 'CIS-2024-003', roomTypeId: 'standard-room', roomTypeName: 'Standard Room',
     checkIn: '2024-12-22', checkOut: '2024-12-24', nights: 2, guests: 1, rooms: 1,
-    guest: { firstName: 'Michael', lastName: 'Chen', email: 'mchen@example.com', phone: '(786) 555-9012' },
+    guest: { firstName: 'Michael', lastName: 'Chen', email: 'curtisinn200@gmail.com', phone: '(786) 555-9012' },
     specialRequests: '', arrivalTime: '3:00 PM',
     status: 'confirmed', paymentStatus: 'paid', paymentMethod: 'stripe_pay_now',
     totalAmount: 178.54, taxAmount: 20.54, depositAmount: 0, source: 'direct_website',
@@ -101,6 +101,6 @@ export const MOCK_AUDIT_LOGS: AuditLog[] = [
 ];
 
 export const MOCK_EMAIL_LOGS: EmailLog[] = [
-  { id: 'email-001', recipientEmail: 'john@example.com', templateType: 'booking_confirmed', subject: 'Booking Confirmed - CIS-2024-001', status: 'sent', reservationId: 'res-001', createdAt: '2024-12-10T14:33:00Z' },
-  { id: 'email-002', recipientEmail: 'sarah@example.com', templateType: 'booking_confirmed', subject: 'Booking Confirmed - CIS-2024-002', status: 'sent', reservationId: 'res-002', createdAt: '2024-12-12T09:22:00Z' },
+  { id: 'email-001', recipientEmail: 'curtisinn200@gmail.com', templateType: 'booking_confirmed', subject: 'Booking Confirmed - CIS-2024-001', status: 'sent', reservationId: 'res-001', createdAt: '2024-12-10T14:33:00Z' },
+  { id: 'email-002', recipientEmail: 'curtisinn200@gmail.com', templateType: 'booking_confirmed', subject: 'Booking Confirmed - CIS-2024-002', status: 'sent', reservationId: 'res-002', createdAt: '2024-12-12T09:22:00Z' },
 ];

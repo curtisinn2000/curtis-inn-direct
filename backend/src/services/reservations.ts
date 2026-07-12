@@ -164,6 +164,6 @@ export async function lookupReservation(db: DbClient, confirmationNumber: string
     paymentStatus: row.payment_status,
     totalAmount: row.total_cents / 100,
     propertyPhone: '(954) 555-0100',
-    propertyEmail: 'reservations@curtisinnsuites.com',
+    propertyEmail: 'curtisinn200@gmail.com',
   };
 }

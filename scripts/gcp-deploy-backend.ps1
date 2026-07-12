@@ -29,7 +29,7 @@ DEPOSIT_RULE: one_night
 STRIPE_ENV: test
 GMAIL_SMTP_HOST: smtp.gmail.com
 GMAIL_SMTP_PORT: "587"
-MAIL_FROM: reservations@curtisinnsuites.com
+MAIL_FROM: curtisinn200@gmail.com
 "@ | Set-Content -LiteralPath $envFile -Encoding ascii
 
 $secretFlags = "DATABASE_URL=curtis-inn-database-url:latest,JWT_SECRET=curtis-inn-jwt-secret:latest,STRIPE_SECRET_KEY=curtis-inn-stripe-secret-key:latest,STRIPE_WEBHOOK_SECRET=curtis-inn-stripe-webhook-secret:latest,GMAIL_SMTP_USER=curtis-inn-gmail-user:latest,GMAIL_SMTP_PASS=curtis-inn-gmail-pass:latest"

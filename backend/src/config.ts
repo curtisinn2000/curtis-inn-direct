@@ -20,7 +20,7 @@ const envSchema = z.object({
   GMAIL_SMTP_PORT: z.coerce.number().int().positive().optional().default(587),
   GMAIL_SMTP_USER: z.string().optional().default(''),
   GMAIL_SMTP_PASS: z.string().optional().default(''),
-  MAIL_FROM: z.string().optional().default('reservations@curtisinnsuites.com'),
+  MAIL_FROM: z.string().optional().default('curtisinn200@gmail.com'),
 });
 
 export const config = envSchema.parse(process.env);

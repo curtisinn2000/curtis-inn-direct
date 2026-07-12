@@ -6,7 +6,7 @@ export const PROPERTY = {
   state: 'Florida',
   zip: '33020',
   phone: '(954) 555-0100',
-  email: 'reservations@curtisinnsuites.com',
+  email: 'curtisinn200@gmail.com',
   checkIn: '3:00 PM',
   checkOut: '11:00 AM',
   website: 'curtisinnsuites.com',

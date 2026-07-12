@@ -445,7 +445,7 @@ Add to Vercel + Supabase (and `.env.local` for dev):
 - `CLOVER_WEBHOOK_SECRET`
 - `CLOVER_ENV` = `sandbox` | `production`
 - `GMAIL_SMTP_HOST`, `GMAIL_SMTP_PORT`, `GMAIL_SMTP_USER`, `GMAIL_SMTP_PASS` (App Password) **or** Google Workspace OAuth refresh token
-- `MAIL_FROM` (e.g. `reservations@curtisinn.com`)
+- `MAIL_FROM` (e.g. `curtisinn200@gmail.com`)
 - `TAX_RATE` (decimal, e.g. `0.07`)
 - `DEPOSIT_RULE` = `one_night` (placeholder for future expansion)
 - `PUBLIC_SITE_URL` (used in email links and Clover redirects)
