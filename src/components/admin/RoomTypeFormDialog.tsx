@@ -66,7 +66,10 @@ export function RoomTypeFormDialog({ open, mode, initial, onClose, onSubmit }: P
     } else {
       setV({ name: '', shortDescription: '', longDescription: '', occupancy: 2, bedType: 'Queen', basePrice: 0, baseInventory: 0, isActive: true, images: [] });
     }
-  }, [open, initial]);
+    // Initialize when opening or switching rooms. Do not reset on parent re-renders
+    // from toast/status updates, because that wipes unsaved photo uploads.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, mode, initial?.id]);
 
   const handleFiles = async (files: FileList | null) => {
     if (!files) return;
