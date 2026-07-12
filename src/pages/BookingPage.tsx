@@ -1,15 +1,21 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
+import { format } from 'date-fns';
+import type { DateRange } from 'react-day-picker';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Calendar as DateRangeCalendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { searchAvailability } from '@/services/api';
 import type { AvailabilityResult, AvailabilitySearch, BookingCartItem } from '@/types';
 import { Users, BedDouble, Calendar, Loader2, Minus, Plus, Trash2 } from 'lucide-react';
 import roomImg from '@/assets/room-king.jpg';
-import { addDaysKey, earliestPublicCheckInKey } from '@/lib/bookingDates';
+import { cn } from '@/lib/utils';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { dateFromKey, earliestPublicCheckInDate, earliestPublicCheckInKey } from '@/lib/bookingDates';
 
 type CartLine = {
   result: AvailabilityResult;
@@ -19,21 +25,34 @@ type CartLine = {
 export default function BookingPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
+  const initialCheckIn = searchParams.get('checkIn') || '';
+  const initialCheckOut = searchParams.get('checkOut') || '';
 
   const [search, setSearch] = useState<AvailabilitySearch>({
-    checkIn: searchParams.get('checkIn') || '',
-    checkOut: searchParams.get('checkOut') || '',
+    checkIn: initialCheckIn,
+    checkOut: initialCheckOut,
     guests: Number(searchParams.get('guests')) || 2,
     rooms: Number(searchParams.get('rooms')) || 1,
   });
+  const [range, setRange] = useState<DateRange | undefined>(() => ({
+    from: initialCheckIn ? dateFromKey(initialCheckIn) : undefined,
+    to: initialCheckOut ? dateFromKey(initialCheckOut) : undefined,
+  }));
+  const [dateOpen, setDateOpen] = useState(false);
   const [results, setResults] = useState<AvailabilityResult[]>([]);
   const [cart, setCart] = useState<CartLine[]>([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
   const [error, setError] = useState('');
   const minCheckIn = earliestPublicCheckInKey();
-  const minCheckOut = search.checkIn ? addDaysKey(search.checkIn, 1) : addDaysKey(minCheckIn, 1);
+  const earliestCheckIn = earliestPublicCheckInDate();
   const requestedRooms = Math.max(1, Number(search.rooms) || 1);
+  const dateLabel = range?.from
+    ? range.to
+      ? `${format(range.from, 'MMM d')} - ${format(range.to, 'MMM d, yyyy')}`
+      : `${format(range.from, 'MMM d, yyyy')} - Select check-out`
+    : 'Select your dates';
 
   const selectedRooms = cart.reduce((sum, line) => sum + line.rooms, 0);
   const remainingToSelect = Math.max(0, requestedRooms - selectedRooms);
@@ -82,6 +101,16 @@ export default function BookingPage() {
     }
   };
 
+  const handleRangeSelect = (nextRange: DateRange | undefined) => {
+    setRange(nextRange);
+    setSearch(current => ({
+      ...current,
+      checkIn: nextRange?.from ? format(nextRange.from, 'yyyy-MM-dd') : '',
+      checkOut: nextRange?.to ? format(nextRange.to, 'yyyy-MM-dd') : '',
+    }));
+    if (nextRange?.from && nextRange?.to) setDateOpen(false);
+  };
+
   const addRoom = (result: AvailabilityResult) => {
     if (selectedRooms >= requestedRooms) return;
     setCart(current => {
@@ -127,31 +156,37 @@ export default function BookingPage() {
         </div>
 
         <Card className="p-6 mb-10">
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+          <div className="grid grid-cols-1 md:grid-cols-[1fr_180px_180px_220px] gap-4 items-end">
             <div>
               <Label className="text-xs text-muted-foreground mb-1.5 flex items-center gap-1">
-                <Calendar className="h-3 w-3" /> Check-in
+                <Calendar className="h-3 w-3" /> Check-in - Check-out
               </Label>
-              <Input
-                type="date"
-                min={minCheckIn}
-                value={search.checkIn}
-                onChange={e => setSearch(s => {
-                  const checkIn = e.target.value;
-                  const minOut = checkIn ? addDaysKey(checkIn, 1) : '';
-                  return {
-                    ...s,
-                    checkIn,
-                    checkOut: s.checkOut && minOut && s.checkOut < minOut ? minOut : s.checkOut,
-                  };
-                })}
-              />
-            </div>
-            <div>
-              <Label className="text-xs text-muted-foreground mb-1.5 flex items-center gap-1">
-                <Calendar className="h-3 w-3" /> Check-out
-              </Label>
-              <Input type="date" min={minCheckOut} value={search.checkOut} onChange={e => setSearch(s => ({ ...s, checkOut: e.target.value }))} />
+              <Popover open={dateOpen} onOpenChange={setDateOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      'w-full justify-start text-left font-normal h-10',
+                      !range?.from && 'text-muted-foreground',
+                    )}
+                  >
+                    <Calendar className="mr-2 h-4 w-4" />
+                    {dateLabel}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0 pointer-events-auto" align="start" sideOffset={8}>
+                  <DateRangeCalendar
+                    mode="range"
+                    selected={range}
+                    onSelect={handleRangeSelect}
+                    numberOfMonths={isMobile ? 1 : 2}
+                    defaultMonth={range?.from ?? earliestCheckIn}
+                    disabled={(date) => date < earliestCheckIn}
+                    initialFocus
+                    className="p-4 pointer-events-auto [&_.rdp-day]:h-11 [&_.rdp-day]:w-11 [&_.rdp-day]:text-base [&_.rdp-head_cell]:w-11 [&_.rdp-caption_label]:text-base [&_.rdp-caption_label]:font-semibold"
+                  />
+                </PopoverContent>
+              </Popover>
             </div>
             <div>
               <Label className="text-xs text-muted-foreground mb-1.5">Guests</Label>
