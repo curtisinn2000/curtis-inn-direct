@@ -22,8 +22,8 @@ gcloud builds submit backend --tag $image --project=$ProjectId
 $envFile = Join-Path $env:TEMP "curtis-run-env.yaml"
 @"
 NODE_ENV: production
-ALLOWED_ORIGINS: "http://localhost:8080,http://localhost:5173,https://curtisinnsuites.com"
-PUBLIC_SITE_URL: "https://curtisinnsuites.com"
+ALLOWED_ORIGINS: "http://localhost:8080,http://localhost:5173,https://curtisinnsuites.com,https://curtis-inn-direct.vercel.app,https://curtis-inn-direct-curtis-inn.vercel.app,https://curtis-inn-direct-git-main-curtis-inn.vercel.app"
+PUBLIC_SITE_URL: "https://curtis-inn-direct.vercel.app"
 TAX_RATE: "0.13"
 DEPOSIT_RULE: one_night
 STRIPE_ENV: test
