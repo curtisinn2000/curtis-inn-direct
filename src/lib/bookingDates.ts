@@ -27,7 +27,7 @@ export function addDaysKey(dateKey: string, days: number): string {
 }
 
 export function earliestPublicCheckInKey(): string {
-  return addDaysKey(hotelTodayKey(), 1);
+  return hotelTodayKey();
 }
 
 export function earliestPublicCheckInDate(): Date {

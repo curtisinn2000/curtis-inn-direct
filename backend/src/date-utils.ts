@@ -41,7 +41,7 @@ export function addDaysKey(dateKey: string, days: number): string {
 }
 
 export function earliestPublicCheckInKey(now = new Date()): string {
-  return addDaysKey(hotelTodayKey(now), 1);
+  return hotelTodayKey(now);
 }
 
 export function addYearsKey(years: number): string {

@@ -38,7 +38,7 @@ export default function BookingPage() {
   const handleSearch = async () => {
     if (!search.checkIn || !search.checkOut) return;
     if (search.checkIn < minCheckIn) {
-      setError(`Online bookings must start on ${minCheckIn} or later.`);
+      setError(`Online bookings cannot start before ${minCheckIn}. Same-day bookings still check in at 3:00 PM.`);
       setResults([]);
       setSearched(true);
       return;

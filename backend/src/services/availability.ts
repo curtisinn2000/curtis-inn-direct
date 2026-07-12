@@ -17,7 +17,7 @@ export function validateStayWindow(input: Pick<AvailabilityInput, 'checkIn' | 'c
   const nights = diffDays(input.checkIn, input.checkOut);
   const earliestCheckIn = earliestPublicCheckInKey();
   if (input.checkIn < earliestCheckIn) {
-    throw badRequest('past_or_same_day_check_in', 'Online bookings must start at least one day after today.', {
+    throw badRequest('past_check_in', 'Online bookings cannot start before today.', {
       earliestCheckIn,
     });
   }
