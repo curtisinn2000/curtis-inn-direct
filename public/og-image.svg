@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" role="img" aria-label="Curtis Inn &amp; Suites">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fff7ed"/>
+      <stop offset="1" stop-color="#dbeafe"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#sky)"/>
+  <rect x="0" y="480" width="1200" height="150" fill="#1f2937"/>
+  <path d="M120 470V260l210-120 210 120v210h-95V335H215v135H120z" fill="#f2a72e"/>
+  <path d="M250 470V370h160v100H250z" fill="#fff"/>
+  <path d="M245 285h65v65h-65zm105 0h65v65h-65z" fill="#fff"/>
+  <text x="610" y="255" font-family="Arial, Helvetica, sans-serif" font-size="70" font-weight="700" fill="#111827">Curtis Inn &amp; Suites</text>
+  <text x="610" y="330" font-family="Arial, Helvetica, sans-serif" font-size="34" fill="#374151">Direct booking in Hollywood, Florida</text>
+  <text x="610" y="392" font-family="Arial, Helvetica, sans-serif" font-size="30" fill="#4b5563">Affordable rooms near the beach, shopping, and local attractions.</text>
+  <rect x="610" y="430" width="270" height="58" rx="8" fill="#f2a72e"/>
+  <text x="645" y="469" font-family="Arial, Helvetica, sans-serif" font-size="26" font-weight="700" fill="#111827">Book Direct</text>
+</svg>

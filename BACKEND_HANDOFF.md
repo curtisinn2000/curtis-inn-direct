@@ -1,6 +1,6 @@
 # Curtis Inn & Suites — Backend Handoff Report
 
-**Audience:** Codex (backend implementation) + deployer (Vercel + Lovable Cloud / Supabase).
+**Audience:** Codex (backend implementation) + deployer (Vercel frontend + Google Cloud backend).
 **Source of truth for the frontend:** this repo, current `main`. Everything below assumes the frontend stays as-is; backend swaps the data layer underneath without changing call sites.
 
 ---
@@ -11,7 +11,7 @@
 - **Audiences:** anonymous public guests (booking + lookup) and a small admin/ops team (inventory, rates, reservations, content).
 - **Policies:** Check-in 3:00 PM, Check-out 11:00 AM.
 - **Payments:** **Clover only**. Never store raw CC details. Use Clover's hosted payment session; webhook confirms.
-- **Tech:** React 18 + Vite + TS frontend, Zustand store, mock service layer in `src/services/api.ts`. Deploy: Vercel + Lovable Cloud (Supabase Postgres + Auth + Edge Functions).
+- **Tech:** React 18 + Vite + TS frontend, Zustand store, mock service layer in `src/services/api.ts`. Deploy: Vercel frontend + Google Cloud backend.
 
 ---
 
@@ -170,7 +170,7 @@ create table public.promo_codes (
 );
 ```
 
-### 3.8 `user_roles` (per Lovable security pattern — roles NEVER on profile)
+### 3.8 `user_roles` (— roles NEVER on profile)
 ```sql
 create type public.app_role as enum ('admin','staff');
 create table public.user_roles (
@@ -198,7 +198,7 @@ create table public.profiles (
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now()
 );
--- trigger: create profile row on signup (Lovable auth pattern)
+-- trigger: create profile row on signup (admin auth pattern)
 ```
 
 ### 3.10 `audit_log`
@@ -372,7 +372,7 @@ end $$;
 
 ## 7. Authentication flow
 
-- **Provider:** Lovable Cloud Auth (Supabase).
+- **Provider:** Backend-managed admin authentication.
 - **Methods:** Email/password + Google for admin users only. No public guest accounts.
 - **Profiles table:** create only if you want display name/avatar — current UI doesn't use it. **Decision needed (see §13).**
 - **Roles:** stored in `user_roles` (never on profile). `app_role` enum: `admin`, `staff`.
@@ -400,7 +400,7 @@ end $$;
 4. **Admin auth gate** — `AdminLayout` must redirect unauthenticated users to `/admin/login`. All admin RPCs must call `has_role(auth.uid(),'admin')`.
 5. **Audit every admin mutation** — bulk price/inventory updates currently have no UI undo, so audit log is the recovery mechanism.
 6. **Clover webhook signature verification** — reject any webhook with a bad/missing signature.
-7. **CORS** — lock edge functions to the production domain and the Lovable preview domain.
+7. **CORS** — lock edge functions to the production domain and approved Vercel preview domains.
 8. **PII** — `lookup_reservation` returns a redacted row (no email, phone, total). Full detail requires admin.
 9. **Rate limit** the public `createReservation` endpoint and `lookup_reservation` (e.g. 10/min/IP) to slow enumeration attacks.
 10. **HTTPS only** for the Vercel deployment and any custom domain.
@@ -438,7 +438,7 @@ end $$;
 
 Add to Vercel + Supabase (and `.env.local` for dev):
 
-- `SUPABASE_URL`, `SUPABASE_ANON_KEY` (public — already wired by Lovable Cloud)
+- `SUPABASE_URL`, `SUPABASE_ANON_KEY` (public — legacy Supabase configuration)
 - `SUPABASE_SERVICE_ROLE_KEY` (server-only)
 - `CLOVER_MERCHANT_ID`
 - `CLOVER_API_KEY` (secret)
@@ -493,14 +493,14 @@ Keep `dateKey()`, formatting helpers, and pure selectors that don't touch the st
 
 ---
 
-## 14. Deploy notes (Vercel + Lovable Cloud)
+## 14. Deploy notes (Vercel + Google Cloud)
 
 - **Frontend:** Vercel auto-deploy from this repo. Build = `vite build`. Output = `dist/`. Set `PUBLIC_SITE_URL` env var per environment.
-- **Backend:** Lovable Cloud (Supabase) — migrations in `supabase/migrations`, edge functions in `supabase/functions`. Deploy via Lovable Cloud or `supabase deploy`.
-- **Secrets:** server secrets only in Supabase (Edge Function env). Anon key in Vercel as `VITE_SUPABASE_PUBLISHABLE_KEY` (or whatever the Lovable Cloud client already uses). Never put Clover or Gmail secrets in Vercel client env.
+- **Backend:** Google Cloud Run service with database migrations in `backend/sql`.
+- **Secrets:** server secrets only in Supabase (Edge Function env). Anon key in Vercel as `VITE_SUPABASE_PUBLISHABLE_KEY` (or the configured public client key). Never put Clover or Gmail secrets in Vercel client env.
 - **Preview vs production:** use separate Supabase projects (or at least separate `CLOVER_ENV=sandbox` / `live`), and separate `PUBLIC_SITE_URL`.
 - **Clover webhook URL** registered with Clover must point at the deployed edge function endpoint (one per environment).
-- **CORS:** restrict edge functions to your custom domain + Lovable preview wildcard.
+- **CORS:** restrict edge functions to your custom domain + approved Vercel preview domains.
 
 ---
 
