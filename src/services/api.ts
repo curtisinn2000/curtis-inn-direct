@@ -108,6 +108,21 @@ export async function setRoomRate(roomId: string, date: string, rate: number): P
   return apiRequest<{ ok: true }>('/admin/rates/set', jsonBody({ roomId, date, rate }));
 }
 
+export async function bulkUpdateRates(roomId: string, dates: string[], rate: number): Promise<{ ok: true }> {
+  return apiRequest<{ ok: true }>('/admin/rates/bulk', jsonBody({
+    roomId,
+    dates,
+    rule: { kind: 'set', amount: rate },
+  }));
+}
+
+export async function clearRoomRates(roomId: string, from?: string): Promise<{ ok: true }> {
+  const query = from ? `?${new URLSearchParams({ from }).toString()}` : '';
+  return apiRequest<{ ok: true }>(`/admin/rates/${encodeURIComponent(roomId)}${query}`, {
+    method: 'DELETE',
+  });
+}
+
 export async function setRemainingAvailability(
   roomId: string,
   date: string,
