@@ -4,13 +4,14 @@ import { pool } from '../db.js';
 import { asyncHandler } from '../middleware.js';
 import {
   availabilitySearchSchema,
+  availabilityQuoteSchema,
   createReservationSchema,
   lookupReservationSchema,
   validatePromoSchema,
 } from '../schemas.js';
 import { getActiveRooms, getRoomBySlug } from '../services/rooms.js';
 import { searchAvailability } from '../services/availability.js';
-import { createReservation, lookupReservation } from '../services/reservations.js';
+import { createReservation, lookupReservation, quoteReservation } from '../services/reservations.js';
 import { notFound } from '../errors.js';
 
 export const publicRouter = Router();
@@ -41,6 +42,18 @@ publicRouter.post('/availability/search', asyncHandler(async (req, res) => {
   res.json(await searchAvailability(pool, input));
 }));
 
+publicRouter.post('/availability/quote', asyncHandler(async (req, res) => {
+  const input = availabilityQuoteSchema.parse(req.body);
+  res.json(await quoteReservation({
+    search: input.search,
+    items: input.items,
+    guestInfo: { firstName: 'Quote', lastName: 'Only', email: 'quote@example.com', phone: '0000000' },
+    specialRequests: '',
+    arrivalTime: '',
+    paymentMethod: 'stripe_pay_now',
+  }));
+}));
+
 publicRouter.post('/reservations', publicWriteLimiter, asyncHandler(async (req, res) => {
   const parsed = createReservationSchema.parse(req.body);
   const roomSlug = parsed.roomSlug ?? parsed.selectedRoom?.roomType.slug;
@@ -48,6 +61,7 @@ publicRouter.post('/reservations', publicWriteLimiter, asyncHandler(async (req, 
     idempotencyKey: parsed.idempotencyKey,
     roomTypeId: parsed.roomTypeId,
     roomSlug,
+    items: parsed.items,
     search: parsed.search,
     guestInfo: parsed.guestInfo,
     specialRequests: parsed.specialRequests,

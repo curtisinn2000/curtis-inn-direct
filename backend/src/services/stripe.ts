@@ -29,10 +29,16 @@ export async function createStripeCheckoutSession(db: DbClient, reservationId: s
        r.guest_last_name,
        r.check_in,
        r.check_out,
-       rt.name as room_type_name
+       coalesce(lines.room_type_summary, rt.name) as room_type_name
      from payments p
      join reservations r on r.id = p.reservation_id
      join room_types rt on rt.id = r.room_type_id
+     left join lateral (
+       select string_agg(l.rooms || ' x ' || lrt.name, ', ' order by lrt.sort_order, lrt.name) as room_type_summary
+       from reservation_room_lines l
+       join room_types lrt on lrt.id = l.room_type_id
+       where l.reservation_id = r.id
+     ) lines on true
      where p.reservation_id = $1
        and p.provider = 'stripe'
        and p.status = 'unpaid'
@@ -47,8 +53,15 @@ export async function createStripeCheckoutSession(db: DbClient, reservationId: s
 
   const row = result.rows[0];
   const stripe = getStripeClient();
-  const successUrl = `${config.PUBLIC_SITE_URL}/booking/confirmation?conf=${encodeURIComponent(row.confirmation_number)}&session_id={CHECKOUT_SESSION_ID}&status=success`;
-  const cancelUrl = `${config.PUBLIC_SITE_URL}/booking/confirmation?conf=${encodeURIComponent(row.confirmation_number)}&status=payment_cancelled`;
+  const redirectParams = new URLSearchParams({
+    conf: row.confirmation_number,
+    room: row.room_type_name,
+    checkIn: row.check_in instanceof Date ? row.check_in.toISOString().slice(0, 10) : String(row.check_in),
+    checkOut: row.check_out instanceof Date ? row.check_out.toISOString().slice(0, 10) : String(row.check_out),
+    total: (Number(row.amount_cents) / 100).toFixed(2),
+  });
+  const successUrl = `${config.PUBLIC_SITE_URL}/booking/confirmation?${redirectParams.toString()}&session_id={CHECKOUT_SESSION_ID}&status=success`;
+  const cancelUrl = `${config.PUBLIC_SITE_URL}/booking/confirmation?${redirectParams.toString()}&status=payment_cancelled`;
   const description = `${row.check_in} to ${row.check_out}`;
   const guestName = `${row.guest_first_name} ${row.guest_last_name}`.trim();
 

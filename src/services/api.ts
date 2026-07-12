@@ -6,6 +6,8 @@ import type {
   Payment,
   DashboardStats,
   BookingFormData,
+  BookingCartItem,
+  BookingQuote,
   RoomRateRule,
   PromoCode,
   AuditLog,
@@ -35,6 +37,10 @@ export async function searchAvailability(search: AvailabilitySearch): Promise<Av
   return apiRequest<AvailabilityResult[]>('/availability/search', jsonBody(search));
 }
 
+export async function quoteAvailability(search: AvailabilitySearch, items: BookingCartItem[]): Promise<BookingQuote> {
+  return apiRequest<BookingQuote>('/availability/quote', jsonBody({ search, items }));
+}
+
 export async function getRoomTypes(): Promise<RoomType[]> {
   return apiRequest<RoomType[]>('/rooms');
 }
@@ -48,6 +54,7 @@ export async function createReservation(data: BookingFormData): Promise<Reservat
     ...data,
     idempotencyKey: crypto.randomUUID(),
     roomSlug: data.selectedRoom?.roomType.slug,
+    items: data.items,
   }));
 }
 

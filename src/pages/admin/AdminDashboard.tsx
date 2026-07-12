@@ -66,7 +66,7 @@ export default function AdminDashboard() {
               <Link key={res.id} to={`/admin/reservations/${res.id}`} className="flex items-center justify-between p-3 rounded-lg hover:bg-muted transition-colors">
                 <div>
                   <p className="text-sm font-medium">{res.guest.firstName} {res.guest.lastName}</p>
-                  <p className="text-xs text-muted-foreground">{res.roomTypeName} · {res.checkIn}</p>
+                  <p className="text-xs text-muted-foreground">{res.roomTypeSummary || res.roomTypeName} · {res.checkIn}</p>
                 </div>
                 <Badge variant={res.status === 'confirmed' ? 'default' : 'secondary'} className="text-xs">
                   {res.status}

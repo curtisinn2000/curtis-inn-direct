@@ -307,9 +307,22 @@ adminRouter.delete('/rates/:roomId', asyncHandler(async (req, res) => {
 
 adminRouter.get('/reservations', asyncHandler(async (_req, res) => {
   const result = await pool.query(
-    `select r.*, rt.name as room_type_name
+    `select r.*, rt.name as room_type_name,
+       coalesce(lines.room_lines, '[]'::json) as room_lines
      from reservations r
      join room_types rt on rt.id = r.room_type_id
+     left join lateral (
+       select json_agg(json_build_object(
+         'roomTypeId', l.room_type_id,
+         'roomTypeName', lrt.name,
+         'roomSlug', lrt.slug,
+         'rooms', l.rooms,
+         'subtotalAmount', l.subtotal_cents / 100.0
+       ) order by lrt.sort_order, lrt.name) as room_lines
+       from reservation_room_lines l
+       join room_types lrt on lrt.id = l.room_type_id
+       where l.reservation_id = r.id
+     ) lines on true
      order by r.created_at desc`,
   );
   res.json(result.rows.map(reservationFromRow));
@@ -317,9 +330,22 @@ adminRouter.get('/reservations', asyncHandler(async (_req, res) => {
 
 adminRouter.get('/reservations/:id', asyncHandler(async (req, res) => {
   const result = await pool.query(
-    `select r.*, rt.name as room_type_name
+    `select r.*, rt.name as room_type_name,
+       coalesce(lines.room_lines, '[]'::json) as room_lines
      from reservations r
      join room_types rt on rt.id = r.room_type_id
+     left join lateral (
+       select json_agg(json_build_object(
+         'roomTypeId', l.room_type_id,
+         'roomTypeName', lrt.name,
+         'roomSlug', lrt.slug,
+         'rooms', l.rooms,
+         'subtotalAmount', l.subtotal_cents / 100.0
+       ) order by lrt.sort_order, lrt.name) as room_lines
+       from reservation_room_lines l
+       join room_types lrt on lrt.id = l.room_type_id
+       where l.reservation_id = r.id
+     ) lines on true
      where r.id = $1`,
     [req.params.id],
   );
@@ -330,9 +356,27 @@ adminRouter.get('/reservations/:id', asyncHandler(async (req, res) => {
 adminRouter.patch('/reservations/:id/status', asyncHandler(async (req, res) => {
   const input = statusUpdateSchema.parse(req.body);
   const result = await pool.query(
-    `update reservations set status = $2, updated_at = now()
-     where id = $1
-     returning *`,
+    `with updated as (
+       update reservations set status = $2, updated_at = now()
+       where id = $1
+       returning *
+     )
+     select updated.*, rt.name as room_type_name,
+       coalesce(lines.room_lines, '[]'::json) as room_lines
+     from updated
+     join room_types rt on rt.id = updated.room_type_id
+     left join lateral (
+       select json_agg(json_build_object(
+         'roomTypeId', l.room_type_id,
+         'roomTypeName', lrt.name,
+         'roomSlug', lrt.slug,
+         'rooms', l.rooms,
+         'subtotalAmount', l.subtotal_cents / 100.0
+       ) order by lrt.sort_order, lrt.name) as room_lines
+       from reservation_room_lines l
+       join room_types lrt on lrt.id = l.room_type_id
+       where l.reservation_id = updated.id
+     ) lines on true`,
     [req.params.id, input.status],
   );
   if (!result.rowCount) throw notFound('reservation_not_found', 'Reservation was not found.');
@@ -342,9 +386,17 @@ adminRouter.patch('/reservations/:id/status', asyncHandler(async (req, res) => {
 
 adminRouter.get('/payments', asyncHandler(async (_req, res) => {
   const result = await pool.query(
-    `select p.*, r.confirmation_number, r.guest_first_name, r.guest_last_name, r.payment_method
+    `select p.*, r.confirmation_number, r.guest_first_name, r.guest_last_name, r.payment_method,
+       coalesce(lines.room_type_summary, rt.name) as room_type_summary
      from payments p
      join reservations r on r.id = p.reservation_id
+     join room_types rt on rt.id = r.room_type_id
+     left join lateral (
+       select string_agg(l.rooms || ' x ' || lrt.name, ', ' order by lrt.sort_order, lrt.name) as room_type_summary
+       from reservation_room_lines l
+       join room_types lrt on lrt.id = l.room_type_id
+       where l.reservation_id = r.id
+     ) lines on true
      order by p.created_at desc`,
   );
   res.json(result.rows.map(paymentFromRow));

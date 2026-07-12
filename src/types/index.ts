@@ -53,6 +53,8 @@ export interface Reservation {
   confirmationNumber: string;
   roomTypeId: string;
   roomTypeName: string;
+  roomTypeSummary: string;
+  roomLines: ReservationRoomLine[];
   checkIn: string;
   checkOut: string;
   nights: number;
@@ -74,6 +76,14 @@ export interface Reservation {
   updatedAt: string;
 }
 
+export interface ReservationRoomLine {
+  roomTypeId: string;
+  roomTypeName: string;
+  roomSlug: string;
+  rooms: number;
+  subtotalAmount: number;
+}
+
 export interface GuestInfo {
   firstName: string;
   lastName: string;
@@ -87,6 +97,7 @@ export interface Payment {
   reservationId: string;
   confirmationNumber: string;
   guestName: string;
+  roomTypeSummary?: string;
   amount: number;
   method: PaymentMethod;
   status: PaymentStatus;
@@ -271,9 +282,30 @@ export interface AvailabilityResult {
   nights: number;
 }
 
+export interface BookingCartItem {
+  roomSlug: string;
+  rooms: number;
+}
+
+export interface BookingQuoteLine {
+  roomType: Pick<RoomType, 'id' | 'slug' | 'name'>;
+  rooms: number;
+  subtotalAmount: number;
+}
+
+export interface BookingQuote {
+  nights: number;
+  totalRooms: number;
+  totalRate: number;
+  taxes: number;
+  grandTotal: number;
+  lines: BookingQuoteLine[];
+}
+
 export interface BookingFormData {
   search: AvailabilitySearch;
   selectedRoom: AvailabilityResult | null;
+  items?: BookingCartItem[];
   guestInfo: GuestInfo;
   specialRequests: string;
   arrivalTime: string;

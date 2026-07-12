@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,10 +6,15 @@ import { Label } from '@/components/ui/label';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { searchAvailability } from '@/services/api';
-import type { AvailabilityResult, AvailabilitySearch } from '@/types';
-import { Users, BedDouble, Calendar, Loader2 } from 'lucide-react';
+import type { AvailabilityResult, AvailabilitySearch, BookingCartItem } from '@/types';
+import { Users, BedDouble, Calendar, Loader2, Minus, Plus, Trash2 } from 'lucide-react';
 import roomImg from '@/assets/room-king.jpg';
 import { addDaysKey, earliestPublicCheckInKey } from '@/lib/bookingDates';
+
+type CartLine = {
+  result: AvailabilityResult;
+  rooms: number;
+};
 
 export default function BookingPage() {
   const [searchParams] = useSearchParams();
@@ -22,15 +27,27 @@ export default function BookingPage() {
     rooms: Number(searchParams.get('rooms')) || 1,
   });
   const [results, setResults] = useState<AvailabilityResult[]>([]);
+  const [cart, setCart] = useState<CartLine[]>([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
   const [error, setError] = useState('');
   const minCheckIn = earliestPublicCheckInKey();
   const minCheckOut = search.checkIn ? addDaysKey(search.checkIn, 1) : addDaysKey(minCheckIn, 1);
+  const requestedRooms = Math.max(1, Number(search.rooms) || 1);
+
+  const selectedRooms = cart.reduce((sum, line) => sum + line.rooms, 0);
+  const remainingToSelect = Math.max(0, requestedRooms - selectedRooms);
+  const cartSubtotal = cart.reduce((sum, line) => sum + line.result.totalRate * line.rooms, 0);
+  const cartTaxes = cart.reduce((sum, line) => sum + line.result.taxes * line.rooms, 0);
+  const cartTotal = cart.reduce((sum, line) => sum + line.result.grandTotal * line.rooms, 0);
+  const cartItems: BookingCartItem[] = useMemo(
+    () => cart.map(line => ({ roomSlug: line.result.roomType.slug, rooms: line.rooms })),
+    [cart],
+  );
 
   useEffect(() => {
     if (search.checkIn && search.checkOut) {
-      handleSearch();
+      void handleSearch();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -51,6 +68,7 @@ export default function BookingPage() {
     }
     setLoading(true);
     setError('');
+    setCart([]);
     try {
       const data = await searchAvailability(search);
       setResults(data);
@@ -64,17 +82,38 @@ export default function BookingPage() {
     }
   };
 
-  const handleSelect = (result: AvailabilityResult) => {
+  const addRoom = (result: AvailabilityResult) => {
+    if (selectedRooms >= requestedRooms) return;
+    setCart(current => {
+      const existing = current.find(line => line.result.roomType.slug === result.roomType.slug);
+      if (existing && existing.rooms >= result.available) return current;
+      if (existing) {
+        return current.map(line => line.result.roomType.slug === result.roomType.slug ? { ...line, rooms: line.rooms + 1 } : line);
+      }
+      return [...current, { result, rooms: 1 }];
+    });
+  };
+
+  const removeOne = (slug: string) => {
+    setCart(current => current.flatMap(line => {
+      if (line.result.roomType.slug !== slug) return [line];
+      if (line.rooms <= 1) return [];
+      return [{ ...line, rooms: line.rooms - 1 }];
+    }));
+  };
+
+  const removeLine = (slug: string) => {
+    setCart(current => current.filter(line => line.result.roomType.slug !== slug));
+  };
+
+  const handleCheckout = () => {
+    if (selectedRooms !== requestedRooms) return;
     const params = new URLSearchParams({
       checkIn: search.checkIn,
       checkOut: search.checkOut,
       guests: String(search.guests),
       rooms: String(search.rooms),
-      roomSlug: result.roomType.slug,
-      nights: String(result.nights),
-      rate: String(result.nightlyRate),
-      total: String(result.grandTotal),
-      taxes: String(result.taxes),
+      items: JSON.stringify(cartItems),
     });
     navigate(`/booking/checkout?${params.toString()}`);
   };
@@ -87,7 +126,6 @@ export default function BookingPage() {
           <h1 className="text-headline">Find your perfect room</h1>
         </div>
 
-        {/* Search */}
         <Card className="p-6 mb-10">
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
             <div>
@@ -135,7 +173,6 @@ export default function BookingPage() {
           </div>
         )}
 
-        {/* Results */}
         {loading && (
           <div className="text-center py-20">
             <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" />
@@ -151,49 +188,110 @@ export default function BookingPage() {
         )}
 
         {!loading && results.length > 0 && (
-          <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">{results.length} rooms available for {results[0].nights} night{results[0].nights > 1 ? 's' : ''}</p>
-            {results.map(result => (
-              <Card key={result.roomType.slug} className="overflow-hidden">
-                <div className="grid grid-cols-1 md:grid-cols-[280px_1fr_220px] gap-0">
-                  <div className="aspect-[4/3] md:aspect-auto bg-muted">
-                    <img src={result.roomType.images?.[0] || roomImg} alt={result.roomType.name} className="w-full h-full object-cover" loading="lazy" />
-                  </div>
-                  <div className="p-5">
-                    <h3 className="text-lg font-semibold mb-1">{result.roomType.name}</h3>
-                    <p className="text-sm text-muted-foreground mb-3">{result.roomType.shortDescription}</p>
-                    <div className="flex items-center gap-4 text-xs text-muted-foreground mb-3">
-                      <span className="flex items-center gap-1"><Users className="h-3.5 w-3.5" /> {result.roomType.occupancy} guests</span>
-                      <span className="flex items-center gap-1"><BedDouble className="h-3.5 w-3.5" /> {result.roomType.bedType}</span>
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-6 items-start">
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">{results.length} room types available for {results[0].nights} night{results[0].nights > 1 ? 's' : ''}</p>
+              {results.map(result => {
+                const selectedForType = cart.find(line => line.result.roomType.slug === result.roomType.slug)?.rooms ?? 0;
+                const canAdd = result.available > selectedForType && selectedRooms < requestedRooms;
+                return (
+                  <Card key={result.roomType.slug} className="overflow-hidden">
+                    <div className="grid grid-cols-1 md:grid-cols-[280px_1fr_220px] gap-0">
+                      <div className="aspect-[4/3] md:aspect-auto bg-muted">
+                        <img src={result.roomType.images?.[0] || roomImg} alt={result.roomType.name} className="w-full h-full object-cover" loading="lazy" />
+                      </div>
+                      <div className="p-5">
+                        <h3 className="text-lg font-semibold mb-1">{result.roomType.name}</h3>
+                        <p className="text-sm text-muted-foreground mb-3">{result.roomType.shortDescription}</p>
+                        <div className="flex items-center gap-4 text-xs text-muted-foreground mb-3">
+                          <span className="flex items-center gap-1"><Users className="h-3.5 w-3.5" /> {result.roomType.occupancy} guests each</span>
+                          <span className="flex items-center gap-1"><BedDouble className="h-3.5 w-3.5" /> {result.roomType.bedType}</span>
+                        </div>
+                        <div className="flex gap-1.5 flex-wrap">
+                          <Badge variant="secondary" className="text-xs">Free cancellation</Badge>
+                          {result.available > 0
+                            ? <Badge variant="secondary" className="text-xs">{result.available} left</Badge>
+                            : <Badge className="text-xs bg-foreground text-background">Sold out</Badge>}
+                          {selectedForType > 0 && <Badge className="text-xs">{selectedForType} selected</Badge>}
+                        </div>
+                      </div>
+                      <div className="p-5 flex flex-col justify-center border-t md:border-t-0 md:border-l bg-muted/30">
+                        <p className="text-xs text-muted-foreground mb-1">{result.nights} night{result.nights > 1 ? 's' : ''}, per room</p>
+                        <p className="text-sm text-muted-foreground">${result.nightlyRate}/night</p>
+                        <p className="text-xs text-muted-foreground mb-1">Taxes: ${result.taxes.toFixed(2)}</p>
+                        <p className="text-2xl font-bold mb-3">${result.grandTotal.toFixed(2)}</p>
+                        <Button
+                          onClick={() => addRoom(result)}
+                          disabled={!canAdd}
+                          className="bg-accent text-accent-foreground hover:bg-accent/90"
+                        >
+                          {selectedForType > 0 ? 'Add Another' : 'Add Room'}
+                        </Button>
+                      </div>
                     </div>
-                    <div className="flex gap-1.5 flex-wrap">
-                      <Badge variant="secondary" className="text-xs">Free cancellation</Badge>
-                      {result.available > 0
-                        ? <Badge variant="secondary" className="text-xs">{result.available} left</Badge>
-                        : <Badge className="text-xs bg-foreground text-background">Sold out</Badge>}
+                  </Card>
+                );
+              })}
+            </div>
+
+            <Card className="p-5 sticky top-24">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="font-semibold">Selected Rooms</h2>
+                <Badge variant={selectedRooms === requestedRooms ? 'default' : 'secondary'}>
+                  {selectedRooms} of {requestedRooms}
+                </Badge>
+              </div>
+
+              {cart.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Add {requestedRooms} room{requestedRooms > 1 ? 's' : ''} to continue.</p>
+              ) : (
+                <div className="space-y-3">
+                  {cart.map(line => (
+                    <div key={line.result.roomType.slug} className="rounded-md border p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-medium">{line.result.roomType.name}</p>
+                          <p className="text-xs text-muted-foreground">${line.result.grandTotal.toFixed(2)} per room</p>
+                        </div>
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => removeLine(line.result.roomType.slug)} aria-label="Remove room type">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                      <div className="mt-3 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => removeOne(line.result.roomType.slug)}>
+                            <Minus className="h-3.5 w-3.5" />
+                          </Button>
+                          <span className="w-6 text-center text-sm font-medium">{line.rooms}</span>
+                          <Button variant="outline" size="icon" className="h-8 w-8" disabled={line.rooms >= line.result.available || selectedRooms >= requestedRooms} onClick={() => addRoom(line.result)}>
+                            <Plus className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                        <span className="text-sm font-semibold">${(line.result.grandTotal * line.rooms).toFixed(2)}</span>
+                      </div>
                     </div>
-                  </div>
-                  <div className="p-5 flex flex-col justify-center border-t md:border-t-0 md:border-l bg-muted/30">
-                    <p className="text-xs text-muted-foreground mb-1">{result.nights} night{result.nights > 1 ? 's' : ''}</p>
-                    <p className="text-sm text-muted-foreground">${result.nightlyRate}/night</p>
-                    <p className="text-xs text-muted-foreground mb-1">Taxes: ${result.taxes.toFixed(2)}</p>
-                    <p className="text-2xl font-bold mb-3">${result.grandTotal.toFixed(2)}</p>
-                    <Button
-                      onClick={() => handleSelect(result)}
-                      disabled={result.available === 0}
-                      className="bg-accent text-accent-foreground hover:bg-accent/90"
-                    >
-                      {result.available === 0 ? 'Sold out' : 'Select Room'}
-                    </Button>
-                    {result.available > 0 && (
-                      <Button variant="ghost" size="sm" className="mt-1 text-xs" onClick={() => handleSelect(result)}>
-                        Reserve & Pay Later
-                      </Button>
-                    )}
-                  </div>
+                  ))}
                 </div>
-              </Card>
-            ))}
+              )}
+
+              <div className="mt-5 space-y-2 text-sm">
+                <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>${cartSubtotal.toFixed(2)}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Taxes & fees</span><span>${cartTaxes.toFixed(2)}</span></div>
+                <div className="flex justify-between border-t pt-2 text-base font-bold"><span>Total</span><span>${cartTotal.toFixed(2)}</span></div>
+              </div>
+
+              {remainingToSelect > 0 && (
+                <p className="mt-4 text-xs text-muted-foreground">Select {remainingToSelect} more room{remainingToSelect > 1 ? 's' : ''} to continue.</p>
+              )}
+              <Button
+                onClick={handleCheckout}
+                disabled={selectedRooms !== requestedRooms}
+                className="mt-4 w-full bg-accent text-accent-foreground hover:bg-accent/90"
+                size="lg"
+              >
+                Continue to Checkout
+              </Button>
+            </Card>
           </div>
         )}
       </div>

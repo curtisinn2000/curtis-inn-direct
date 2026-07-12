@@ -170,6 +170,17 @@ export function ReservationLookupModal({ trigger }: ReservationLookupModalProps)
                 <p className="text-xs text-muted-foreground mt-0.5">{result.roomType}</p>
               </div>
 
+              {result.roomLines?.length > 1 && (
+                <div className="rounded-md bg-muted/50 p-3 space-y-1">
+                  {result.roomLines.map(line => (
+                    <div key={line.roomTypeId} className="flex justify-between text-xs text-muted-foreground">
+                      <span>{line.rooms} x {line.roomTypeName}</span>
+                      <span>${line.subtotalAmount.toFixed(2)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <CalendarDays className="h-3.5 w-3.5 shrink-0" />

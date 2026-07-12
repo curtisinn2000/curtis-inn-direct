@@ -29,11 +29,31 @@ export function roomFromRow(row: DbRow) {
 }
 
 export function reservationFromRow(row: DbRow) {
+  const roomLines = asArray<{
+    roomTypeId: string;
+    roomTypeName: string;
+    roomSlug: string;
+    rooms: number;
+    subtotalAmount: number;
+  }>(row.room_lines).map(line => ({
+    roomTypeId: asString(line.roomTypeId),
+    roomTypeName: asString(line.roomTypeName),
+    roomSlug: asString(line.roomSlug),
+    rooms: asNumber(line.rooms),
+    subtotalAmount: asNumber(line.subtotalAmount),
+  }));
+  const roomTypeName = asString(row.room_type_name ?? row.name);
+  const roomTypeSummary = roomLines.length
+    ? roomLines.map(line => `${line.rooms} x ${line.roomTypeName}`).join(', ')
+    : `${asNumber(row.rooms)} x ${roomTypeName}`;
+
   return {
     id: asString(row.id),
     confirmationNumber: asString(row.confirmation_number),
     roomTypeId: asString(row.room_type_id),
-    roomTypeName: asString(row.room_type_name ?? row.name),
+    roomTypeName,
+    roomTypeSummary,
+    roomLines,
     checkIn: row.check_in instanceof Date ? row.check_in.toISOString().slice(0, 10) : asString(row.check_in),
     checkOut: row.check_out instanceof Date ? row.check_out.toISOString().slice(0, 10) : asString(row.check_out),
     nights: asNumber(row.nights),
@@ -67,6 +87,7 @@ export function paymentFromRow(row: DbRow) {
     reservationId: asString(row.reservation_id),
     confirmationNumber: asString(row.confirmation_number),
     guestName: `${asString(row.guest_first_name)} ${asString(row.guest_last_name)}`.trim(),
+    roomTypeSummary: asString(row.room_type_summary),
     amount: centsToDollars(asNumber(row.amount_cents)),
     method: asString(row.payment_method),
     status: asString(row.status),

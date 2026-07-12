@@ -88,7 +88,7 @@ export default function AdminReservationsPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-6 text-sm text-muted-foreground">
-                    <span>{res.roomTypeName}</span>
+                    <span>{res.roomTypeSummary || res.roomTypeName}</span>
                     <span>{res.checkIn} → {res.checkOut}</span>
                     <span className="font-semibold text-foreground">${res.totalAmount.toFixed(2)}</span>
                     <Badge className={cn('text-xs', statusColors[res.status])}>{res.status.replace('_', ' ')}</Badge>

@@ -30,13 +30,14 @@ export function validateStayWindow(input: Pick<AvailabilityInput, 'checkIn' | 'c
 export async function searchAvailability(db: DbClient, input: AvailabilityInput) {
   const nights = validateStayWindow(input);
   const stayDates = eachStayDate(input.checkIn, input.checkOut);
+  const minOccupancyForListing = Math.max(1, Math.ceil(input.guests / input.rooms));
 
   const roomsResult = await db.query(
     `select *, $1::numeric as tax_rate
      from room_types
      where is_active = true and occupancy >= $2
      order by sort_order, name`,
-    [config.TAX_RATE, input.guests],
+    [config.TAX_RATE, minOccupancyForListing],
   );
 
   const results = [];
@@ -47,7 +48,7 @@ export async function searchAvailability(db: DbClient, input: AvailabilityInput)
       baseInventory: row.base_inventory,
       checkIn: input.checkIn,
       checkOut: input.checkOut,
-      roomsNeeded: input.rooms,
+      roomsNeeded: 1,
     });
 
     const taxes = Math.round(pricing.subtotalCents * config.TAX_RATE);

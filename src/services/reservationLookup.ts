@@ -1,6 +1,14 @@
 import type { Reservation } from '@/types';
 import { apiRequest, jsonBody } from './client';
 
+export interface ReservationLookupRoomLine {
+  roomTypeId: string;
+  roomTypeName: string;
+  roomSlug: string;
+  rooms: number;
+  subtotalAmount: number;
+}
+
 export interface ReservationLookupResult {
   confirmationNumber: string;
   guestName: string;
@@ -8,6 +16,7 @@ export interface ReservationLookupResult {
   checkOut: string;
   guests: number;
   roomType: string;
+  roomLines: ReservationLookupRoomLine[];
   status: Reservation['status'];
   paymentStatus: Reservation['paymentStatus'];
   totalAmount: number;

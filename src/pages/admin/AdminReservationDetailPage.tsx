@@ -65,7 +65,7 @@ export default function AdminReservationDetailPage() {
           <Card className="p-5">
             <h3 className="font-semibold mb-4">Stay Details</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-              <div><p className="text-muted-foreground text-xs">Room</p><p className="font-medium">{res.roomTypeName}</p></div>
+              <div><p className="text-muted-foreground text-xs">Room</p><p className="font-medium">{res.roomTypeSummary || res.roomTypeName}</p></div>
               <div><p className="text-muted-foreground text-xs">Check-in</p><p>{res.checkIn}</p></div>
               <div><p className="text-muted-foreground text-xs">Check-out</p><p>{res.checkOut}</p></div>
               <div><p className="text-muted-foreground text-xs">Nights</p><p>{res.nights}</p></div>
@@ -78,6 +78,19 @@ export default function AdminReservationDetailPage() {
               <div className="mt-4 p-3 bg-muted rounded-lg">
                 <p className="text-xs text-muted-foreground mb-1">Special Requests</p>
                 <p className="text-sm">{res.specialRequests}</p>
+              </div>
+            )}
+            {res.roomLines.length > 0 && (
+              <div className="mt-4 p-3 bg-muted rounded-lg">
+                <p className="text-xs text-muted-foreground mb-2">Room Breakdown</p>
+                <div className="space-y-1">
+                  {res.roomLines.map(line => (
+                    <div key={line.roomTypeId} className="flex justify-between text-sm">
+                      <span>{line.rooms} x {line.roomTypeName}</span>
+                      <span>${line.subtotalAmount.toFixed(2)}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </Card>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,27 +7,43 @@ import { Card } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { PROPERTY } from '@/config/constants';
-import type { PaymentMethod, GuestInfo, BookingFormData, RoomType } from '@/types';
-import { createReservation, createStripeCheckoutSession, getRoomBySlug } from '@/services/api';
+import type { PaymentMethod, GuestInfo, BookingFormData, BookingCartItem, BookingQuote } from '@/types';
+import { createReservation, createStripeCheckoutSession, quoteAvailability } from '@/services/api';
 import { CreditCard, Loader2, ArrowLeft, Lock } from 'lucide-react';
 import { cn } from '@/lib/utils';
+
+function parseItems(raw: string | null, roomSlug: string, rooms: number): BookingCartItem[] {
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw) as BookingCartItem[];
+      const valid = parsed
+        .filter(item => item?.roomSlug && Number(item.rooms) > 0)
+        .map(item => ({ roomSlug: item.roomSlug, rooms: Math.round(Number(item.rooms)) }));
+      if (valid.length) return valid;
+    } catch {
+      return [];
+    }
+  }
+  return roomSlug ? [{ roomSlug, rooms }] : [];
+}
 
 export default function CheckoutPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  const roomSlug = searchParams.get('roomSlug') || searchParams.get('room') || '';
-  const [room, setRoom] = useState<RoomType | null>(null);
-  const [roomLoading, setRoomLoading] = useState(true);
-  const [roomError, setRoomError] = useState('');
-  const nights = Number(searchParams.get('nights')) || 1;
-  const total = Number(searchParams.get('total')) || 0;
-  const taxes = Number(searchParams.get('taxes')) || 0;
   const checkIn = searchParams.get('checkIn') || '';
   const checkOut = searchParams.get('checkOut') || '';
   const guests = Number(searchParams.get('guests')) || 1;
   const rooms = Number(searchParams.get('rooms')) || 1;
+  const legacyRoomSlug = searchParams.get('roomSlug') || searchParams.get('room') || '';
+  const items = useMemo(
+    () => parseItems(searchParams.get('items'), legacyRoomSlug, rooms),
+    [searchParams, legacyRoomSlug, rooms],
+  );
 
+  const [quote, setQuote] = useState<BookingQuote | null>(null);
+  const [quoteLoading, setQuoteLoading] = useState(true);
+  const [quoteError, setQuoteError] = useState('');
   const [step, setStep] = useState<'details' | 'payment'>('details');
   const [guest, setGuest] = useState<GuestInfo>({ firstName: '', lastName: '', email: '', phone: '' });
   const [specialRequests, setSpecialRequests] = useState('');
@@ -38,45 +54,45 @@ export default function CheckoutPage() {
 
   useEffect(() => {
     let cancelled = false;
-    async function loadRoom() {
-      if (!roomSlug) {
-        setRoom(null);
-        setRoomLoading(false);
-        setRoomError('');
+    async function loadQuote() {
+      if (!checkIn || !checkOut || items.length === 0) {
+        setQuote(null);
+        setQuoteError('');
+        setQuoteLoading(false);
         return;
       }
-      setRoomLoading(true);
-      setRoomError('');
+      setQuoteLoading(true);
+      setQuoteError('');
       try {
-        const result = await getRoomBySlug(roomSlug);
-        if (!cancelled) setRoom(result);
+        const result = await quoteAvailability({ checkIn, checkOut, guests, rooms }, items);
+        if (!cancelled) setQuote(result);
       } catch (err) {
         if (!cancelled) {
-          setRoom(null);
-          setRoomError(err instanceof Error ? err.message : 'Room type was not found.');
+          setQuote(null);
+          setQuoteError(err instanceof Error ? err.message : 'Unable to price selected rooms.');
         }
       } finally {
-        if (!cancelled) setRoomLoading(false);
+        if (!cancelled) setQuoteLoading(false);
       }
     }
-    void loadRoom();
+    void loadQuote();
     return () => { cancelled = true; };
-  }, [roomSlug]);
+  }, [checkIn, checkOut, guests, rooms, items]);
 
-  if (roomLoading) {
+  if (quoteLoading) {
     return (
       <div className="section-padding container-narrow text-center">
         <Loader2 className="h-6 w-6 animate-spin mx-auto mb-4 text-muted-foreground" />
-        <p className="text-sm text-muted-foreground">Loading room...</p>
+        <p className="text-sm text-muted-foreground">Pricing selected rooms...</p>
       </div>
     );
   }
 
-  if (!room) {
+  if (!quote) {
     return (
       <div className="section-padding container-narrow text-center">
-        <h1 className="text-headline mb-4">No room selected</h1>
-        {roomError && <p className="text-sm text-muted-foreground mb-6">{roomError}</p>}
+        <h1 className="text-headline mb-4">No rooms selected</h1>
+        {quoteError && <p className="text-sm text-muted-foreground mb-6">{quoteError}</p>}
         <Button asChild><a href="/booking">Back to search</a></Button>
       </div>
     );
@@ -87,32 +103,8 @@ export default function CheckoutPage() {
     try {
       const payload: BookingFormData = {
         search: { checkIn, checkOut, guests, rooms },
-        selectedRoom: {
-          roomType: {
-            id: room.id,
-            slug: room.slug,
-            name: room.name,
-            shortDescription: room.shortDescription,
-            longDescription: room.longDescription,
-            occupancy: room.occupancy,
-            bedType: room.bedType,
-            images: room.images,
-            amenities: room.amenities,
-            policies: room.policies,
-            basePrice: room.basePrice,
-            taxRate: room.taxRate,
-            isActive: room.isActive,
-            inventoryCount: room.inventoryCount,
-            cancellationTerms: room.cancellationTerms,
-            sortOrder: room.sortOrder,
-          },
-          available: rooms,
-          nightlyRate: Math.max(0, (total - taxes) / nights),
-          totalRate: total - taxes,
-          taxes,
-          grandTotal: total,
-          nights,
-        },
+        selectedRoom: null,
+        items,
         guestInfo: guest,
         specialRequests,
         arrivalTime,
@@ -121,7 +113,6 @@ export default function CheckoutPage() {
       };
 
       const reservation = await createReservation(payload);
-
       const session = await createStripeCheckoutSession(reservation.id);
       window.location.href = session.sessionUrl;
     } catch (error) {
@@ -140,12 +131,10 @@ export default function CheckoutPage() {
         </button>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Main form */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Steps indicator */}
             <div className="flex items-center gap-2 text-sm">
               <span className={cn('px-3 py-1 rounded-full text-xs font-medium', step === 'details' ? 'bg-accent text-accent-foreground' : 'bg-muted text-muted-foreground')}>Guest Details</span>
-              <span className="text-muted-foreground">→</span>
+              <span className="text-muted-foreground">-&gt;</span>
               <span className={cn('px-3 py-1 rounded-full text-xs font-medium', step === 'payment' ? 'bg-accent text-accent-foreground' : 'bg-muted text-muted-foreground')}>Payment</span>
             </div>
 
@@ -224,15 +213,16 @@ export default function CheckoutPage() {
             )}
           </div>
 
-          {/* Order summary */}
           <div>
             <Card className="p-6 sticky top-24">
               <h3 className="font-semibold mb-4">Booking Summary</h3>
               <div className="space-y-3 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Room</span>
-                  <span className="font-medium">{room.name}</span>
-                </div>
+                {quote.lines.map(line => (
+                  <div key={line.roomType.slug} className="flex justify-between gap-4">
+                    <span className="text-muted-foreground">{line.rooms} x {line.roomType.name}</span>
+                    <span className="font-medium">${line.subtotalAmount.toFixed(2)}</span>
+                  </div>
+                ))}
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Check-in</span>
                   <span>{checkIn}</span>
@@ -243,21 +233,21 @@ export default function CheckoutPage() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Duration</span>
-                  <span>{nights} night{nights > 1 ? 's' : ''}</span>
+                  <span>{quote.nights} night{quote.nights > 1 ? 's' : ''}</span>
                 </div>
                 <hr />
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Subtotal</span>
-                  <span>${(total - taxes).toFixed(2)}</span>
+                  <span>${quote.totalRate.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Taxes & fees</span>
-                  <span>${taxes.toFixed(2)}</span>
+                  <span>${quote.taxes.toFixed(2)}</span>
                 </div>
                 <hr />
                 <div className="flex justify-between text-base font-bold">
                   <span>Total</span>
-                  <span>${total.toFixed(2)}</span>
+                  <span>${quote.grandTotal.toFixed(2)}</span>
                 </div>
               </div>
             </Card>

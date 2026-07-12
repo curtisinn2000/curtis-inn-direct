@@ -11,6 +11,12 @@ export const availabilitySearchSchema = z.object({
   rooms: z.coerce.number().int().min(1).max(10),
 });
 
+export const bookingItemSchema = z.object({
+  roomSlug: z.string().trim().min(1).max(160).optional(),
+  roomTypeId: z.string().uuid().optional(),
+  rooms: z.coerce.number().int().min(1).max(10),
+}).refine(item => Boolean(item.roomSlug || item.roomTypeId), 'Room type is required');
+
 export const guestInfoSchema = z.object({
   firstName: z.string().trim().min(1).max(80),
   lastName: z.string().trim().min(1).max(80),
@@ -23,6 +29,7 @@ export const paymentMethodSchema = z.enum(['stripe_pay_now']);
 export const createReservationSchema = z.object({
   idempotencyKey: z.string().trim().min(8).max(120).optional(),
   search: availabilitySearchSchema,
+  items: z.array(bookingItemSchema).min(1).max(10).optional(),
   selectedRoom: z
     .object({
       roomType: z.object({
@@ -40,6 +47,11 @@ export const createReservationSchema = z.object({
   paymentMethod: paymentMethodSchema,
   agreedToPolicies: z.boolean().refine(Boolean, 'Policies must be accepted'),
   promoCode: z.string().trim().max(40).optional(),
+});
+
+export const availabilityQuoteSchema = z.object({
+  search: availabilitySearchSchema,
+  items: z.array(bookingItemSchema).min(1).max(10),
 });
 
 export const lookupReservationSchema = z.object({

@@ -34,6 +34,7 @@ export default function AdminPaymentsPage() {
               <tr>
                 <th className="text-left p-3 font-medium">Guest</th>
                 <th className="text-left p-3 font-medium">Confirmation</th>
+                <th className="text-left p-3 font-medium">Rooms</th>
                 <th className="text-left p-3 font-medium">Amount</th>
                 <th className="text-left p-3 font-medium">Method</th>
                 <th className="text-left p-3 font-medium">Status</th>
@@ -46,6 +47,7 @@ export default function AdminPaymentsPage() {
                 <tr key={pay.id} className="border-t hover:bg-muted/50">
                   <td className="p-3 font-medium">{pay.guestName}</td>
                   <td className="p-3 font-mono text-xs">{pay.confirmationNumber}</td>
+                  <td className="p-3 text-xs text-muted-foreground">{pay.roomTypeSummary || '-'}</td>
                   <td className="p-3 font-semibold">${pay.amount.toFixed(2)}</td>
                   <td className="p-3 capitalize text-xs">{pay.method.replace(/_/g, ' ')}</td>
                   <td className="p-3"><Badge variant="secondary" className="text-xs">{pay.status}</Badge></td>
