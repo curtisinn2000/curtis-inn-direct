@@ -35,7 +35,9 @@ export async function searchAvailability(db: DbClient, input: AvailabilityInput)
   const roomsResult = await db.query(
     `select *, $1::numeric as tax_rate
      from room_types
-     where is_active = true and occupancy >= $2
+     where is_active = true
+       and deleted_at is null
+       and occupancy >= $2
      order by sort_order, name`,
     [config.TAX_RATE, minOccupancyForListing],
   );

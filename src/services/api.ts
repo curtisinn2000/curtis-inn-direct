@@ -150,8 +150,8 @@ export async function updateAdminRoomType(id: string, data: RoomTypeWritePayload
   });
 }
 
-export async function deleteAdminRoomType(id: string): Promise<RoomType> {
-  return apiRequest<RoomType>(`/admin/rooms/${encodeURIComponent(id)}`, {
+export async function deleteAdminRoomType(id: string): Promise<{ ok: true }> {
+  return apiRequest<{ ok: true }>(`/admin/rooms/${encodeURIComponent(id)}`, {
     method: 'DELETE',
   });
 }

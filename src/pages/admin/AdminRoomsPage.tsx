@@ -277,6 +277,10 @@ export default function AdminRoomsPage() {
                       onCheckedChange={(checked) => void handleActiveChange(room, checked)}
                     />
                     <Button variant="outline" size="sm" disabled={savingId !== null} onClick={() => setDialog({ mode: 'edit', id: room.id })}>Edit</Button>
+                    <Button variant="outline" size="sm" disabled={savingId !== null} onClick={() => setConfirmDelete(room.id)} aria-label="Delete room type">
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                      Delete room type
+                    </Button>
                     <Button size="sm" disabled={savingId !== null} onClick={() => void handleActiveChange(room, true)}>Reactivate</Button>
                   </div>
                 </div>

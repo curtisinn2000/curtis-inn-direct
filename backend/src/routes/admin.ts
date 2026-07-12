@@ -61,7 +61,7 @@ const contentImageUpload = multer({
 adminRouter.get('/dashboard', asyncHandler(async (_req, res) => {
   const stats = await pool.query(
     `with totals as (
-       select coalesce(sum(base_inventory), 0)::int as total_rooms from room_types where is_active = true
+       select coalesce(sum(base_inventory), 0)::int as total_rooms from room_types where is_active = true and deleted_at is null
      ), today_booked as (
        select coalesce(sum(rn.rooms), 0)::int as booked
        from reservation_nights rn
@@ -211,7 +211,13 @@ adminRouter.delete('/content/attractions/:id', asyncHandler(async (req, res) => 
 }));
 
 adminRouter.get('/rooms', asyncHandler(async (_req, res) => {
-  const result = await pool.query(`select *, $1::numeric as tax_rate from room_types order by sort_order, name`, [config.TAX_RATE]);
+  const result = await pool.query(
+    `select *, $1::numeric as tax_rate
+     from room_types
+     where deleted_at is null
+     order by sort_order, name`,
+    [config.TAX_RATE],
+  );
   res.json(result.rows.map(roomFromRow));
 }));
 
@@ -224,6 +230,7 @@ adminRouter.get('/calendar', asyncHandler(async (req, res) => {
     `select *, $1::numeric as tax_rate
      from room_types
      where is_active = true
+       and deleted_at is null
        and ($2::uuid is null or id = $2::uuid)
      order by sort_order, name`,
     [config.TAX_RATE, roomParams[0] ?? null],
@@ -308,6 +315,7 @@ adminRouter.put('/rooms/:id', asyncHandler(async (req, res) => {
       amenities=coalesce($11, amenities), policies=coalesce($12, policies),
       cancellation_terms=coalesce($13, cancellation_terms), sort_order=$14, updated_at=now()
      where id=$1
+       and deleted_at is null
      returning *, $15::numeric as tax_rate`,
     [
       roomId, input.name, input.shortDescription, input.longDescription, input.occupancy, input.bedType,
@@ -322,13 +330,14 @@ adminRouter.put('/rooms/:id', asyncHandler(async (req, res) => {
 
 adminRouter.delete('/rooms/:id', asyncHandler(async (req, res) => {
   const roomId = z.string().uuid().parse(req.params.id);
-  const before = await pool.query(`select * from room_types where id = $1`, [roomId]);
+  const before = await pool.query(`select * from room_types where id = $1 and deleted_at is null`, [roomId]);
   if (!before.rowCount) throw notFound('room_not_found', 'Room type was not found.');
 
   const result = await pool.query(
     `update room_types
-     set is_active = false, updated_at = now()
+     set is_active = false, deleted_at = now(), updated_at = now()
      where id = $1
+       and deleted_at is null
      returning *, $2::numeric as tax_rate`,
     [roomId, config.TAX_RATE],
   );
@@ -336,15 +345,17 @@ adminRouter.delete('/rooms/:id', asyncHandler(async (req, res) => {
     actorId: req.user!.id,
     entity: 'room_type',
     entityId: roomId,
-    action: 'deactivate',
+    action: 'delete',
     before: roomFromRow({ ...before.rows[0], tax_rate: config.TAX_RATE }),
     after: roomFromRow(result.rows[0]),
   });
-  res.json(roomFromRow(result.rows[0]));
+  res.json({ ok: true });
 }));
 
 adminRouter.post('/rates/set', asyncHandler(async (req, res) => {
   const input = rateWriteSchema.parse(req.body);
+  const room = await pool.query(`select 1 from room_types where id = $1 and deleted_at is null`, [input.roomId]);
+  if (!room.rowCount) throw notFound('room_not_found', 'Room type was not found.');
   await pool.query(
     `insert into rate_overrides(room_type_id, stay_date, rate, updated_by, updated_at)
      values ($1, $2, $3, $4, now())
@@ -358,7 +369,7 @@ adminRouter.post('/rates/set', asyncHandler(async (req, res) => {
 
 adminRouter.post('/inventory/remaining', asyncHandler(async (req, res) => {
   const input = remainingWriteSchema.parse(req.body);
-  const room = await pool.query(`select base_inventory from room_types where id = $1`, [input.roomId]);
+  const room = await pool.query(`select base_inventory from room_types where id = $1 and deleted_at is null`, [input.roomId]);
   if (!room.rowCount) throw notFound('room_not_found', 'Room type was not found.');
   const booked = await getBookedCount(pool, input.roomId, input.date);
   if (input.remaining + booked > Number(room.rows[0].base_inventory)) {
@@ -382,7 +393,7 @@ adminRouter.post('/inventory/remaining', asyncHandler(async (req, res) => {
 adminRouter.post('/inventory/bulk', asyncHandler(async (req, res) => {
   const input = bulkInventorySchema.parse(req.body);
   await withTransaction(async client => {
-    const room = await client.query(`select base_inventory from room_types where id = $1`, [input.roomId]);
+    const room = await client.query(`select base_inventory from room_types where id = $1 and deleted_at is null`, [input.roomId]);
     if (!room.rowCount) throw notFound('room_not_found', 'Room type was not found.');
     if (input.patch.inventory != null && input.patch.inventory > Number(room.rows[0].base_inventory)) {
       throw badRequest('inventory_exceeded', 'Inventory cannot exceed the room type base inventory.', {
@@ -410,7 +421,7 @@ adminRouter.post('/inventory/bulk', asyncHandler(async (req, res) => {
 adminRouter.post('/rates/bulk', asyncHandler(async (req, res) => {
   const input = bulkRatesSchema.parse(req.body);
   await withTransaction(async client => {
-    const room = await client.query(`select * from room_types where id = $1`, [input.roomId]);
+    const room = await client.query(`select * from room_types where id = $1 and deleted_at is null`, [input.roomId]);
     if (!room.rowCount) throw notFound('room_not_found', 'Room type was not found.');
     for (const date of input.dates) {
       const current = await client.query(
