@@ -63,7 +63,7 @@ export default function RoomsPage() {
 
         {!loading && !error && rooms.length > 0 && <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {rooms.map(room => (
-            <Link key={room.slug} to={`/room/${room.slug}`}>
+            <Link key={room.slug} to={`/room/${room.slug}`} className="block h-full">
               <Card className="overflow-hidden group hover:shadow-lg transition-all duration-300 h-full flex flex-col">
                 <div className="aspect-[16/10] bg-muted relative overflow-hidden">
                   <img src={room.images[0] ?? roomImg} alt={room.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
@@ -74,13 +74,13 @@ export default function RoomsPage() {
                   )}
                 </div>
                 <div className="p-5 flex flex-col flex-1">
-                  <h2 className="text-lg font-semibold mb-2">{room.name}</h2>
-                  <p className="text-sm text-muted-foreground mb-4 flex-1">{room.shortDescription}</p>
-                  <div className="flex items-center gap-4 text-xs text-muted-foreground mb-4">
+                  <h2 className="text-lg font-semibold mb-2 min-h-[3.5rem] line-clamp-2">{room.name}</h2>
+                  <p className="text-sm text-muted-foreground mb-4 min-h-[4.5rem] line-clamp-3">{room.shortDescription}</p>
+                  <div className="flex min-h-[2.25rem] flex-wrap items-center gap-4 text-xs text-muted-foreground mb-4">
                     <span className="flex items-center gap-1"><Users className="h-3.5 w-3.5" /> Up to {room.occupancy}</span>
                     <span className="flex items-center gap-1"><BedDouble className="h-3.5 w-3.5" /> {room.bedType}</span>
                   </div>
-                  <div className="flex items-center justify-between pt-4 border-t">
+                  <div className="mt-auto flex items-center justify-between gap-3 pt-4 border-t">
                     <div>
                       <span className="text-xl font-bold">${room.basePrice}</span>
                       <span className="text-sm text-muted-foreground"> / night</span>

@@ -11,6 +11,7 @@ export default function LocationPage() {
   const [attractions, setAttractions] = useState<NearbyAttraction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const showAttractionMedia = attractions.some(attraction => attraction.image);
 
   useEffect(() => {
     let cancelled = false;
@@ -70,18 +71,24 @@ export default function LocationPage() {
             )}
             {!loading && error && <Card className="p-8 text-center text-sm text-destructive md:col-span-2">{error}</Card>}
             {!loading && !error && attractions.map(attraction => (
-              <Card key={attraction.id} className="overflow-hidden">
-                {attraction.image && (
+              <Card key={attraction.id} className="h-full overflow-hidden flex flex-col">
+                {showAttractionMedia && (
                   <div className="aspect-[16/9] bg-muted">
-                    <img src={resolveContentImage(attraction.image, fallbackContentImages.beach)} alt={attraction.name} className="h-full w-full object-cover" loading="lazy" />
+                    {attraction.image ? (
+                      <img src={resolveContentImage(attraction.image, fallbackContentImages.beach)} alt={attraction.name} className="h-full w-full object-cover" loading="lazy" />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+                        <MapPin className="h-7 w-7 text-accent/70" />
+                      </div>
+                    )}
                   </div>
                 )}
-                <div className="p-5 flex items-start gap-4">
+                <div className="p-5 flex flex-1 items-start gap-4">
                   <MapPin className="h-5 w-5 text-accent shrink-0 mt-0.5" />
-                  <div>
-                    <h3 className="font-semibold text-sm">{attraction.name}</h3>
+                  <div className="flex min-h-[7rem] flex-col">
+                    <h3 className="font-semibold text-sm line-clamp-2 min-h-[2.5rem]">{attraction.name}</h3>
                     <p className="text-xs text-accent font-medium mb-1">{attraction.distance}</p>
-                    <p className="text-sm text-muted-foreground">{attraction.description}</p>
+                    <p className="text-sm text-muted-foreground line-clamp-3">{attraction.description}</p>
                   </div>
                 </div>
               </Card>

@@ -45,6 +45,7 @@ export default function HomePage() {
   const featuredReviews = (content?.reviews ?? []).filter(r => r.isFeatured).slice(0, 4);
   const featuredFaqs = (content?.faqs ?? []).slice(0, 4);
   const featuredAttractions = (content?.attractions ?? []).slice(0, 3);
+  const showAttractionMedia = featuredAttractions.some(attraction => attraction.image);
   const contentGallerySlides = content?.gallery.length
     ? content.gallery.map(image => ({ src: resolveContentImage(image.url, fallbackContentImages.hero), alt: image.alt }))
     : gallerySlides;
@@ -186,15 +187,15 @@ export default function HomePage() {
           )}
           {!roomsLoading && !roomsError && featuredRooms.length > 0 && <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
             {featuredRooms.map(room => (
-              <Link key={room.slug} to={`/room/${room.slug}`}>
-                <Card className="overflow-hidden group hover:shadow-lg transition-all duration-300">
+              <Link key={room.slug} to={`/room/${room.slug}`} className="block h-full">
+                <Card className="h-full overflow-hidden group hover:shadow-lg transition-all duration-300 flex flex-col">
                   <div className="aspect-[4/3] bg-muted relative overflow-hidden">
                     <img src={room.images[0] ?? roomImg} alt={room.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
                   </div>
-                  <div className="p-4">
-                    <h3 className="font-semibold mb-1">{room.name}</h3>
-                    <p className="text-caption text-sm line-clamp-2 mb-3">{room.shortDescription}</p>
-                    <div className="flex items-end justify-between">
+                  <div className="p-4 flex flex-1 flex-col">
+                    <h3 className="font-semibold mb-1 min-h-[2.75rem] line-clamp-2">{room.name}</h3>
+                    <p className="text-caption text-sm line-clamp-2 min-h-[2.75rem] mb-3">{room.shortDescription}</p>
+                    <div className="mt-auto flex items-end justify-between pt-3">
                       <div>
                         <span className="text-lg font-bold">${room.basePrice}</span>
                         <span className="text-caption text-xs"> / night</span>
@@ -263,21 +264,27 @@ export default function HomePage() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {featuredAttractions.map(attraction => (
-              <Card key={attraction.id} className="overflow-hidden hover:shadow-md transition-shadow">
-                {attraction.image && (
+              <Card key={attraction.id} className="h-full overflow-hidden hover:shadow-md transition-shadow flex flex-col">
+                {showAttractionMedia && (
                   <div className="aspect-[16/9] bg-muted">
-                    <img src={resolveContentImage(attraction.image, fallbackContentImages.beach)} alt={attraction.name} className="h-full w-full object-cover" loading="lazy" />
+                    {attraction.image ? (
+                      <img src={resolveContentImage(attraction.image, fallbackContentImages.beach)} alt={attraction.name} className="h-full w-full object-cover" loading="lazy" />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+                        <MapPin className="h-7 w-7 text-accent/70" />
+                      </div>
+                    )}
                   </div>
                 )}
-                <div className="p-6">
-                <div className="flex items-start gap-3 mb-3">
-                  <MapPin className="h-5 w-5 text-accent shrink-0 mt-0.5" />
-                  <div>
-                    <h3 className="font-semibold">{attraction.name}</h3>
-                    <p className="text-xs text-accent font-medium">{attraction.distance}</p>
+                <div className="p-6 flex flex-1 flex-col">
+                  <div className="flex items-start gap-3 mb-3 min-h-[3.5rem]">
+                    <MapPin className="h-5 w-5 text-accent shrink-0 mt-0.5" />
+                    <div className="min-w-0">
+                      <h3 className="font-semibold line-clamp-2">{attraction.name}</h3>
+                      <p className="text-xs text-accent font-medium">{attraction.distance}</p>
+                    </div>
                   </div>
-                </div>
-                <p className="text-caption text-sm">{attraction.description}</p>
+                  <p className="text-caption text-sm line-clamp-3">{attraction.description}</p>
                 </div>
               </Card>
             ))}
@@ -299,14 +306,14 @@ export default function HomePage() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {featuredReviews.map(review => (
-              <div key={review.id} className="p-6 rounded-lg bg-primary-foreground/5">
+              <div key={review.id} className="p-6 rounded-lg bg-primary-foreground/5 min-h-[220px] h-full flex flex-col">
                 <div className="flex gap-0.5 mb-3">
                   {Array.from({ length: review.rating }).map((_, i) => (
                     <Star key={i} className="h-4 w-4 fill-accent text-accent" />
                   ))}
                 </div>
-                <p className="text-sm opacity-90 mb-4 leading-relaxed">"{review.comment}"</p>
-                <div className="flex items-center justify-between">
+                <p className="text-sm opacity-90 mb-4 leading-relaxed line-clamp-5 flex-1">"{review.comment}"</p>
+                <div className="mt-auto flex items-center justify-between gap-3">
                   <p className="text-sm font-medium">{review.guestName}</p>
                   <p className="text-xs opacity-50">{review.source}</p>
                 </div>
@@ -328,15 +335,15 @@ export default function HomePage() {
             <p className="text-overline mb-2">FAQ</p>
             <h2 className="text-headline">Common questions</h2>
           </div>
-          <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {featuredFaqs.map(faq => (
-              <div key={faq.id} className="p-5 rounded-lg border hover:bg-muted/50 transition-colors">
-                <h3 className="font-medium mb-2">{faq.question}</h3>
-                <p className="text-sm text-muted-foreground">{faq.answer}</p>
+              <div key={faq.id} className="p-5 rounded-lg border hover:bg-muted/50 transition-colors h-full min-h-[150px] flex flex-col">
+                <h3 className="font-medium mb-2 min-h-[3rem] line-clamp-2">{faq.question}</h3>
+                <p className="text-sm text-muted-foreground line-clamp-3">{faq.answer}</p>
               </div>
             ))}
             {featuredFaqs.length === 0 && (
-              <div className="p-5 rounded-lg border text-center text-sm text-muted-foreground">
+              <div className="p-5 rounded-lg border text-center text-sm text-muted-foreground md:col-span-2">
                 FAQ content will be added soon.
               </div>
             )}

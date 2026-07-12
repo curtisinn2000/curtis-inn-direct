@@ -47,6 +47,13 @@ const todayKey = () => new Date().toISOString().slice(0, 10);
 const allowedImageTypes = ['image/jpeg', 'image/png', 'image/webp'];
 const maxImageBytes = 5 * 1024 * 1024;
 
+type GalleryUploadItem = {
+  id: string;
+  file: File;
+  previewUrl: string;
+  alt: string;
+};
+
 export default function AdminContentPage() {
   const { toast } = useToast();
   const [content, setContent] = useState<WebsiteContent>(emptyContent);
@@ -54,8 +61,7 @@ export default function AdminContentPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [dialog, setDialog] = useState<'faq' | 'gallery' | 'review' | 'attraction' | null>(null);
-  const [galleryFile, setGalleryFile] = useState<File | null>(null);
-  const [galleryPreview, setGalleryPreview] = useState('');
+  const [galleryFiles, setGalleryFiles] = useState<GalleryUploadItem[]>([]);
   const [attractionFile, setAttractionFile] = useState<File | null>(null);
   const [attractionPreview, setAttractionPreview] = useState('');
   const [faqForm, setFaqForm] = useState<Omit<FAQ, 'id'>>({ question: '', answer: '', category: 'General', sortOrder: 0 });
@@ -135,21 +141,40 @@ export default function AdminContentPage() {
 
   async function submitGallery(event: FormEvent) {
     event.preventDefault();
-    if (!galleryFile) {
-      showError('Gallery image was not added', new Error('Please choose an image to upload.'));
+    if (galleryFiles.length === 0) {
+      showError('Gallery images were not added', new Error('Please choose one or more images to upload.'));
       return;
     }
     setSaving(true);
+    const createdIds: string[] = [];
     try {
-      const uploaded = await uploadContentImage(galleryFile);
-      await createGalleryImage({ ...galleryForm, url: uploaded.url, sortOrder: nextSort(content.gallery) });
+      const startingSort = nextSort(content.gallery);
+      for (const [index, item] of galleryFiles.entries()) {
+        const uploaded = await uploadContentImage(item.file);
+        await createGalleryImage({
+          ...galleryForm,
+          alt: item.alt.trim() || altFromFileName(item.file.name),
+          url: uploaded.url,
+          sortOrder: startingSort + index,
+        });
+        createdIds.push(item.id);
+      }
       setGalleryForm({ url: '', alt: '', category: 'exterior', sortOrder: 0 });
-      clearGalleryFile();
+      clearGalleryFiles();
       setDialog(null);
       await loadContent();
-      toast({ title: 'Gallery image added', description: 'The image is now visible in the website gallery.' });
+      toast({
+        title: galleryFiles.length === 1 ? 'Gallery image added' : 'Gallery images added',
+        description: `${galleryFiles.length} image${galleryFiles.length === 1 ? ' is' : 's are'} now visible in the website gallery.`,
+      });
     } catch (err) {
-      showError('Gallery image was not added', err);
+      const failed = galleryFiles.find(item => !createdIds.includes(item.id));
+      removeCreatedGalleryUploads(createdIds);
+      await loadContent();
+      showError(
+        'Gallery upload stopped',
+        new Error(`${failed ? `${failed.file.name}: ` : ''}${err instanceof Error ? err.message : 'Please try again.'}`),
+      );
     } finally {
       setSaving(false);
     }
@@ -202,15 +227,21 @@ export default function AdminContentPage() {
     }
   }
 
-  function chooseGalleryFile(file: File | undefined) {
-    if (!file) return;
+  function chooseGalleryFiles(fileList: FileList | File[] | undefined) {
+    const files = Array.from(fileList ?? []);
+    if (files.length === 0) return;
     try {
-      validateImageFile(file);
-      clearGalleryFile();
-      setGalleryFile(file);
-      setGalleryPreview(URL.createObjectURL(file));
+      files.forEach(validateImageFile);
+      const timestamp = Date.now();
+      const items = files.map((file, index) => ({
+        id: makeUploadId(file, timestamp, index),
+        file,
+        previewUrl: URL.createObjectURL(file),
+        alt: altFromFileName(file.name),
+      }));
+      setGalleryFiles(current => [...current, ...items]);
     } catch (err) {
-      showError('Image was not selected', err);
+      showError('Images were not selected', err);
     }
   }
 
@@ -226,10 +257,35 @@ export default function AdminContentPage() {
     }
   }
 
-  function clearGalleryFile() {
-    if (galleryPreview.startsWith('blob:')) URL.revokeObjectURL(galleryPreview);
-    setGalleryFile(null);
-    setGalleryPreview('');
+  function updateGalleryAlt(id: string, alt: string) {
+    setGalleryFiles(current => current.map(item => item.id === id ? { ...item, alt } : item));
+  }
+
+  function removeGalleryFile(id: string) {
+    setGalleryFiles(current => {
+      const item = current.find(upload => upload.id === id);
+      if (item?.previewUrl.startsWith('blob:')) URL.revokeObjectURL(item.previewUrl);
+      return current.filter(upload => upload.id !== id);
+    });
+  }
+
+  function removeCreatedGalleryUploads(ids: string[]) {
+    if (ids.length === 0) return;
+    setGalleryFiles(current => {
+      current
+        .filter(item => ids.includes(item.id))
+        .forEach(item => {
+          if (item.previewUrl.startsWith('blob:')) URL.revokeObjectURL(item.previewUrl);
+        });
+      return current.filter(item => !ids.includes(item.id));
+    });
+  }
+
+  function clearGalleryFiles() {
+    galleryFiles.forEach(item => {
+      if (item.previewUrl.startsWith('blob:')) URL.revokeObjectURL(item.previewUrl);
+    });
+    setGalleryFiles([]);
   }
 
   function clearAttractionFile() {
@@ -416,24 +472,21 @@ export default function AdminContentPage() {
       <Dialog open={dialog === 'gallery'} onOpenChange={open => !open && setDialog(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Add Gallery Image</DialogTitle>
-            <DialogDescription>Upload a JPG, PNG, or WebP image up to 5 MB.</DialogDescription>
+            <DialogTitle>Add Gallery Images</DialogTitle>
+            <DialogDescription>Upload one or more JPG, PNG, or WebP images up to 5 MB each.</DialogDescription>
           </DialogHeader>
           <form onSubmit={submitGallery} className="space-y-4">
-            <ImageUploadField
-              label="Image"
-              fileName={galleryFile?.name}
-              previewUrl={galleryPreview}
-              required
-              onChange={chooseGalleryFile}
-              onClear={clearGalleryFile}
+            <GalleryBatchUploadField
+              files={galleryFiles}
+              onAdd={chooseGalleryFiles}
+              onRemove={removeGalleryFile}
+              onAltChange={updateGalleryAlt}
             />
-            <Field label="Alt Text"><Input required value={galleryForm.alt} onChange={event => setGalleryForm({ ...galleryForm, alt: event.target.value })} /></Field>
             <Field label="Category"><Input required value={galleryForm.category} onChange={event => setGalleryForm({ ...galleryForm, category: event.target.value as GalleryImage['category'] })} /></Field>
             <DialogFooter>
               <Button type="submit" disabled={saving}>
                 {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Add Image
+                {galleryFiles.length > 1 ? `Add ${galleryFiles.length} Images` : 'Add Image'}
               </Button>
             </DialogFooter>
           </form>
@@ -501,6 +554,70 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
+function GalleryBatchUploadField({
+  files,
+  onAdd,
+  onRemove,
+  onAltChange,
+}: {
+  files: GalleryUploadItem[];
+  onAdd: (files: FileList | undefined) => void;
+  onRemove: (id: string) => void;
+  onAltChange: (id: string, alt: string) => void;
+}) {
+  const inputId = 'content-upload-gallery-images';
+  return (
+    <div className="space-y-3">
+      <Label htmlFor={inputId}>Images *</Label>
+      <Input
+        id={inputId}
+        type="file"
+        multiple
+        accept="image/jpeg,image/png,image/webp"
+        className="hidden"
+        onChange={event => {
+          onAdd(event.target.files ?? undefined);
+          event.currentTarget.value = '';
+        }}
+      />
+      <Button type="button" variant="outline" onClick={() => document.getElementById(inputId)?.click()}>
+        <Upload className="mr-2 h-4 w-4" />
+        Choose Images
+      </Button>
+
+      {files.length === 0 ? (
+        <div className="flex h-36 items-center justify-center rounded-md border border-dashed bg-muted/40 text-muted-foreground">
+          <ImageIcon className="mr-2 h-5 w-5" />
+          <span className="text-sm">No images selected</span>
+        </div>
+      ) : (
+        <div className="grid max-h-[420px] gap-3 overflow-y-auto pr-1 sm:grid-cols-2">
+          {files.map(item => (
+            <div key={item.id} className="rounded-md border bg-background p-3">
+              <div className="aspect-[4/3] overflow-hidden rounded-md bg-muted">
+                <img src={item.previewUrl} alt="" className="h-full w-full object-cover" />
+              </div>
+              <p className="mt-2 truncate text-xs text-muted-foreground" title={item.file.name}>{item.file.name}</p>
+              <div className="mt-2 space-y-2">
+                <Label htmlFor={`${item.id}-alt`} className="text-xs">Alt text</Label>
+                <Input
+                  id={`${item.id}-alt`}
+                  value={item.alt}
+                  onChange={event => onAltChange(item.id, event.target.value)}
+                  placeholder="Describe this image"
+                />
+              </div>
+              <Button type="button" variant="ghost" size="sm" className="mt-2 px-0" onClick={() => onRemove(item.id)}>
+                Remove
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ImageUploadField({
   label,
   fileName,
@@ -557,6 +674,17 @@ function ImageUploadField({
 
 function nextSort(items: Array<{ sortOrder?: number }>) {
   return items.reduce((max, item) => Math.max(max, Number(item.sortOrder ?? 0)), 0) + 1;
+}
+
+function altFromFileName(fileName: string) {
+  return fileName.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').trim() || 'Curtis Inn & Suites photo';
+}
+
+function makeUploadId(file: File, timestamp: number, index: number) {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return crypto.randomUUID();
+  }
+  return `${timestamp}-${index}-${file.name}-${file.lastModified}`;
 }
 
 function renderStars(rating: number) {
