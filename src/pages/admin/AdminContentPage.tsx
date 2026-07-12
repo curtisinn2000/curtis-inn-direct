@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Dialog,
@@ -29,6 +30,7 @@ import {
   uploadContentImage,
 } from '@/services/api';
 import { resolveContentImage } from '@/lib/contentImages';
+import { GALLERY_CATEGORY_OPTIONS, formatGalleryCategory } from '@/lib/galleryCategories';
 import { GripVertical, ImageIcon, Loader2, Plus, Star, Trash2, Upload } from 'lucide-react';
 
 const emptyContent: WebsiteContent = {
@@ -390,6 +392,9 @@ export default function AdminContentPage() {
             {content.gallery.map(img => (
               <div key={img.id} className="relative aspect-square rounded-lg overflow-hidden bg-muted group">
                 <img src={resolveContentImage(img.url)} alt={img.alt} className="w-full h-full object-cover" />
+                <span className="absolute left-2 top-2 rounded-full bg-background/90 px-2 py-1 text-xs font-medium text-foreground shadow-sm">
+                  {formatGalleryCategory(img.category)}
+                </span>
                 <div className="absolute inset-0 bg-foreground/0 group-hover:bg-foreground/30 transition-colors flex items-center justify-center">
                   <Button variant="destructive" size="icon" className="opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => removeItem('gallery', img.id, img.alt)} disabled={saving}>
                     <Trash2 className="h-4 w-4" />
@@ -482,7 +487,23 @@ export default function AdminContentPage() {
               onRemove={removeGalleryFile}
               onAltChange={updateGalleryAlt}
             />
-            <Field label="Category"><Input required value={galleryForm.category} onChange={event => setGalleryForm({ ...galleryForm, category: event.target.value as GalleryImage['category'] })} /></Field>
+            <Field label="Category">
+              <Select
+                value={galleryForm.category}
+                onValueChange={value => setGalleryForm({ ...galleryForm, category: value as GalleryImage['category'] })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a gallery group" />
+                </SelectTrigger>
+                <SelectContent>
+                  {GALLERY_CATEGORY_OPTIONS.map(category => (
+                    <SelectItem key={category.value} value={category.value}>
+                      {category.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
             <DialogFooter>
               <Button type="submit" disabled={saving}>
                 {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
