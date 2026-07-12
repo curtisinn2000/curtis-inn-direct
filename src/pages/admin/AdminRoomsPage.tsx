@@ -12,6 +12,7 @@ import type { RoomType } from '@/types';
 import {
   createAdminRoomType,
   deleteAdminRoomType,
+  getRoomTypes,
   getAdminRoomTypes,
   updateAdminRoomType,
   type RoomTypeWritePayload,
@@ -62,6 +63,8 @@ export default function AdminRoomsPage() {
     () => [...rooms].sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name)),
     [rooms],
   );
+  const activeRooms = useMemo(() => sortedRooms.filter(room => room.isActive), [sortedRooms]);
+  const hiddenRooms = useMemo(() => sortedRooms.filter(room => !room.isActive), [sortedRooms]);
   const editing = dialog?.mode === 'edit' ? rooms.find(r => r.id === dialog.id) : undefined;
   const deletingRoom = confirmDelete ? rooms.find(r => r.id === confirmDelete) : null;
 
@@ -80,6 +83,13 @@ export default function AdminRoomsPage() {
   useEffect(() => {
     void loadRooms();
   }, []);
+
+  const verifyHiddenFromPublic = async (room: RoomType) => {
+    const publicRooms = await getRoomTypes();
+    if (publicRooms.some(publicRoom => publicRoom.id === room.id || publicRoom.slug === room.slug)) {
+      throw new Error(`${room.name} is still being returned by the public rooms API. Please try again before accepting bookings.`);
+    }
+  };
 
   const handleSubmit = async (vals: RoomFormValues) => {
     setSavingId(dialog?.id ?? 'new');
@@ -109,6 +119,7 @@ export default function AdminRoomsPage() {
     setSavingId(room.id);
     try {
       await updateAdminRoomType(room.id, valuesToPayload({ ...roomToInitial(room), isActive: active }, room));
+      if (!active) await verifyHiddenFromPublic(room);
       toast({
         title: active ? 'Room activated' : 'Room hidden',
         description: active ? `${room.name} is visible on the website.` : `${room.name} is hidden from public booking pages.`,
@@ -131,6 +142,7 @@ export default function AdminRoomsPage() {
     setSavingId(confirmDelete);
     try {
       await deleteAdminRoomType(confirmDelete);
+      if (deletingRoom) await verifyHiddenFromPublic(deletingRoom);
       toast({ title: 'Room type hidden', description: `${name} was removed from the public website and booking flow.` });
       setConfirmDelete(null);
       await loadRooms();
@@ -150,7 +162,9 @@ export default function AdminRoomsPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-title">Room Types</h1>
-          <p className="text-sm text-muted-foreground">{sortedRooms.length} room types configured. Active rooms appear on the public website.</p>
+          <p className="text-sm text-muted-foreground">
+            {activeRooms.length} active on the website, {hiddenRooms.length} hidden from booking.
+          </p>
         </div>
         <Button onClick={() => setDialog({ mode: 'add' })} disabled={loading || savingId !== null}><Plus className="h-4 w-4" /> Add room type</Button>
       </div>
@@ -171,7 +185,14 @@ export default function AdminRoomsPage() {
 
       {!loading && !error && (
         <div className="space-y-3">
-          {sortedRooms.map(room => {
+          {activeRooms.length > 0 && (
+            <div className="flex items-center justify-between pt-1">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Active on website</h2>
+              <Badge variant="secondary">{activeRooms.length}</Badge>
+            </div>
+          )}
+
+          {activeRooms.map(room => {
             const cover = room.images[0] ?? roomFallback;
             const soldOut = room.inventoryCount === 0;
             const saving = savingId === room.id;
@@ -204,14 +225,57 @@ export default function AdminRoomsPage() {
                     {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                     <Switch checked={room.isActive} disabled={savingId !== null} onCheckedChange={(c) => void handleActiveChange(room, c)} />
                     <Button variant="outline" size="sm" disabled={savingId !== null} onClick={() => setDialog({ mode: 'edit', id: room.id })}>Edit</Button>
-                    <Button variant="ghost" size="sm" disabled={savingId !== null || !room.isActive} onClick={() => setConfirmDelete(room.id)} aria-label="Remove room type from website">
+                    <Button variant="outline" size="sm" disabled={savingId !== null} onClick={() => setConfirmDelete(room.id)} aria-label="Hide room type from website">
                       <Trash2 className="h-4 w-4 text-destructive" />
+                      Hide from website
                     </Button>
                   </div>
                 </div>
               </Card>
             );
           })}
+
+          {hiddenRooms.length > 0 && (
+            <div className="flex items-center justify-between pt-6">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Hidden from website and booking</h2>
+              <Badge variant="secondary">{hiddenRooms.length}</Badge>
+            </div>
+          )}
+
+          {hiddenRooms.map(room => {
+            const cover = room.images[0] ?? roomFallback;
+            const saving = savingId === room.id;
+            return (
+              <Card key={room.id} className="p-5 bg-muted/30">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="flex items-start gap-4 flex-1">
+                    <img src={cover} alt={room.name} className="w-20 h-20 rounded-md object-cover bg-muted shrink-0 opacity-70" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        <h3 className="font-semibold">{room.name}</h3>
+                        <Badge variant="secondary">Hidden</Badge>
+                        <span className="text-[10px] font-mono text-muted-foreground">ID: {room.id}</span>
+                      </div>
+                      <p className="text-sm text-muted-foreground line-clamp-1">{room.shortDescription || '-'}</p>
+                      <div className="flex gap-4 mt-2 text-xs text-muted-foreground flex-wrap">
+                        <span>Occupancy: {room.occupancy}</span>
+                        <span>Bed: {room.bedType}</span>
+                        <span>Inventory: {room.inventoryCount}</span>
+                        <span>Photos: {room.images.length}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                    <Switch checked={room.isActive} disabled={savingId !== null} onCheckedChange={(c) => void handleActiveChange(room, c)} />
+                    <Button variant="outline" size="sm" disabled={savingId !== null} onClick={() => setDialog({ mode: 'edit', id: room.id })}>Edit</Button>
+                    <Button size="sm" disabled={savingId !== null} onClick={() => void handleActiveChange(room, true)}>Reactivate</Button>
+                  </div>
+                </div>
+              </Card>
+            );
+          })}
+
           {sortedRooms.length === 0 && (
             <Card className="p-10 text-center text-sm text-muted-foreground">
               No room types yet. Click <span className="font-medium">Add room type</span> to create one.
