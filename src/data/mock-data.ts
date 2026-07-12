@@ -41,7 +41,7 @@ export const MOCK_ATTRACTIONS: NearbyAttraction[] = [
 
 export const MOCK_RESERVATIONS: Reservation[] = [
   {
-    id: 'res-001', confirmationNumber: 'CIS-2024-001', roomTypeId: 'king-room', roomTypeName: 'King Room',
+    id: 'res-001', confirmationNumber: 'CIS-20260712-0000001', roomTypeId: 'king-room', roomTypeName: 'King Room',
     checkIn: '2024-12-20', checkOut: '2024-12-23', nights: 3, guests: 2, rooms: 1,
     guest: { firstName: 'John', lastName: 'Anderson', email: 'curtisinn200@gmail.com', phone: '(305) 555-1234' },
     specialRequests: 'Late check-in around 9 PM', arrivalTime: '9:00 PM',
@@ -51,7 +51,7 @@ export const MOCK_RESERVATIONS: Reservation[] = [
     createdAt: '2024-12-10T14:30:00Z', updatedAt: '2024-12-10T14:30:00Z',
   },
   {
-    id: 'res-002', confirmationNumber: 'CIS-2024-002', roomTypeId: 'two-bedroom-suite', roomTypeName: 'Two-Bedroom Suite',
+    id: 'res-002', confirmationNumber: 'CIS-20260712-0000002', roomTypeId: 'two-bedroom-suite', roomTypeName: 'Two-Bedroom Suite',
     checkIn: '2024-12-21', checkOut: '2024-12-26', nights: 5, guests: 5, rooms: 1,
     guest: { firstName: 'Sarah', lastName: 'Williams', email: 'curtisinn200@gmail.com', phone: '(954) 555-5678' },
     specialRequests: 'Extra towels please', arrivalTime: '4:00 PM',
@@ -61,7 +61,7 @@ export const MOCK_RESERVATIONS: Reservation[] = [
     createdAt: '2024-12-12T09:15:00Z', updatedAt: '2024-12-12T09:15:00Z',
   },
   {
-    id: 'res-003', confirmationNumber: 'CIS-2024-003', roomTypeId: 'standard-room', roomTypeName: 'Standard Room',
+    id: 'res-003', confirmationNumber: 'CIS-20260712-0000003', roomTypeId: 'standard-room', roomTypeName: 'Standard Room',
     checkIn: '2024-12-22', checkOut: '2024-12-24', nights: 2, guests: 1, rooms: 1,
     guest: { firstName: 'Michael', lastName: 'Chen', email: 'curtisinn200@gmail.com', phone: '(786) 555-9012' },
     specialRequests: '', arrivalTime: '3:00 PM',
@@ -73,8 +73,8 @@ export const MOCK_RESERVATIONS: Reservation[] = [
 ];
 
 export const MOCK_PAYMENTS: Payment[] = [
-  { id: 'pay-001', reservationId: 'res-001', confirmationNumber: 'CIS-2024-001', guestName: 'John Anderson', amount: 369.69, method: 'stripe_pay_now', status: 'paid', stripePaymentIntentId: 'pi_mock_12345', createdAt: '2024-12-10T14:32:00Z', updatedAt: '2024-12-10T14:32:00Z' },
-  { id: 'pay-002', reservationId: 'res-002', confirmationNumber: 'CIS-2024-002', guestName: 'Sarah Williams', amount: 219, method: 'stripe_pay_now', status: 'paid', stripePaymentIntentId: 'pi_mock_12346', createdAt: '2024-12-12T09:20:00Z', updatedAt: '2024-12-12T09:20:00Z' },
+  { id: 'pay-001', reservationId: 'res-001', confirmationNumber: 'CIS-20260712-0000001', guestName: 'John Anderson', amount: 369.69, method: 'stripe_pay_now', status: 'paid', stripePaymentIntentId: 'pi_mock_12345', createdAt: '2024-12-10T14:32:00Z', updatedAt: '2024-12-10T14:32:00Z' },
+  { id: 'pay-002', reservationId: 'res-002', confirmationNumber: 'CIS-20260712-0000002', guestName: 'Sarah Williams', amount: 219, method: 'stripe_pay_now', status: 'paid', stripePaymentIntentId: 'pi_mock_12346', createdAt: '2024-12-12T09:20:00Z', updatedAt: '2024-12-12T09:20:00Z' },
 ];
 
 export const MOCK_PROMO_CODES: PromoCode[] = [
@@ -96,11 +96,11 @@ export const MOCK_DASHBOARD: DashboardStats = {
 };
 
 export const MOCK_AUDIT_LOGS: AuditLog[] = [
-  { id: 'log-001', adminId: 'admin-1', adminName: 'Front Desk', action: 'reservation.confirmed', details: 'Confirmed reservation CIS-2024-001', entityType: 'reservation', entityId: 'res-001', createdAt: '2024-12-10T14:35:00Z' },
-  { id: 'log-002', adminId: 'admin-1', adminName: 'Front Desk', action: 'reservation.checked_in', details: 'Guest checked in for CIS-2024-001', entityType: 'reservation', entityId: 'res-001', createdAt: '2024-12-20T15:10:00Z' },
+  { id: 'log-001', adminId: 'admin-1', adminName: 'Front Desk', action: 'reservation.confirmed', details: 'Confirmed reservation CIS-20260712-0000001', entityType: 'reservation', entityId: 'res-001', createdAt: '2024-12-10T14:35:00Z' },
+  { id: 'log-002', adminId: 'admin-1', adminName: 'Front Desk', action: 'reservation.checked_in', details: 'Guest checked in for CIS-20260712-0000001', entityType: 'reservation', entityId: 'res-001', createdAt: '2024-12-20T15:10:00Z' },
 ];
 
 export const MOCK_EMAIL_LOGS: EmailLog[] = [
-  { id: 'email-001', recipientEmail: 'curtisinn200@gmail.com', templateType: 'booking_confirmed', subject: 'Booking Confirmed - CIS-2024-001', status: 'sent', reservationId: 'res-001', createdAt: '2024-12-10T14:33:00Z' },
-  { id: 'email-002', recipientEmail: 'curtisinn200@gmail.com', templateType: 'booking_confirmed', subject: 'Booking Confirmed - CIS-2024-002', status: 'sent', reservationId: 'res-002', createdAt: '2024-12-12T09:22:00Z' },
+  { id: 'email-001', recipientEmail: 'curtisinn200@gmail.com', templateType: 'booking_confirmed', subject: 'Booking Confirmed - CIS-20260712-0000001', status: 'sent', reservationId: 'res-001', createdAt: '2024-12-10T14:33:00Z' },
+  { id: 'email-002', recipientEmail: 'curtisinn200@gmail.com', templateType: 'booking_confirmed', subject: 'Booking Confirmed - CIS-20260712-0000002', status: 'sent', reservationId: 'res-002', createdAt: '2024-12-12T09:22:00Z' },
 ];

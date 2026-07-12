@@ -1,8 +1,7 @@
-import crypto from 'node:crypto';
 import type { DbClient } from '../db.js';
 import { withTransaction } from '../db.js';
 import { config } from '../config.js';
-import { eachStayDate } from '../date-utils.js';
+import { eachStayDate, hotelTodayKey } from '../date-utils.js';
 import { badRequest, conflict } from '../errors.js';
 import { audit, reservationFromRow } from '../transformers.js';
 import { lockRoomDates, priceAndAvailabilityForRoom, validateStayWindow } from './availability.js';
@@ -265,13 +264,27 @@ export async function createReservation(input: CreateReservationInput) {
 }
 
 async function issueConfirmationNumber(db: DbClient) {
+  const issueDate = hotelTodayKey();
+  const compactDate = issueDate.replaceAll('-', '');
+
   for (let attempt = 0; attempt < 10; attempt++) {
-    const suffix = crypto.randomInt(0, 1_000_000).toString().padStart(6, '0');
-    const confirmation = `CIS-${suffix}`;
+    const result = await db.query(
+      `insert into confirmation_sequences(confirmation_date, last_value, updated_at)
+       values ($1, 1, now())
+       on conflict (confirmation_date)
+       do update set
+         last_value = confirmation_sequences.last_value + 1,
+         updated_at = now()
+       returning last_value`,
+      [issueDate],
+    );
+    const sequence = Number(result.rows[0].last_value);
+    const confirmation = `CIS-${compactDate}-${String(sequence).padStart(7, '0')}`;
     const exists = await db.query(`select 1 from reservations where confirmation_number = $1`, [confirmation]);
     if (exists.rowCount === 0) return confirmation;
   }
-  return `CIS-${Date.now().toString().slice(-8)}`;
+
+  throw conflict('confirmation_number_exhausted', 'Unable to issue a unique confirmation number. Please try again.');
 }
 
 export async function lookupReservation(db: DbClient, confirmationNumber: string, lastName: string) {

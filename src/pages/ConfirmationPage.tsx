@@ -6,7 +6,7 @@ import { CheckCircle, Phone, Mail, MapPin, Printer } from 'lucide-react';
 
 export default function ConfirmationPage() {
   const [params] = useSearchParams();
-  const conf = params.get('conf') || 'CIS-000000';
+  const conf = params.get('conf') || 'CIS-20260712-0000001';
   const status = params.get('status') || '';
   const roomName = params.get('room') || '';
   const checkIn = params.get('checkIn') || '';

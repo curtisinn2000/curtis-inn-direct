@@ -112,7 +112,7 @@ export function ReservationLookupModal({ trigger }: ReservationLookupModalProps)
               <Label htmlFor="conf-num" className="text-xs font-medium">Confirmation Number</Label>
               <Input
                 id="conf-num"
-                placeholder="e.g. CIS-2024-001"
+                placeholder="e.g. CIS-20260712-0000001"
                 value={confirmationNumber}
                 onChange={(e) => setConfirmationNumber(e.target.value)}
                 disabled={loading}
