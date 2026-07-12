@@ -143,7 +143,7 @@ export default function AdminRoomsPage() {
     try {
       await deleteAdminRoomType(confirmDelete);
       if (deletingRoom) await verifyHiddenFromPublic(deletingRoom);
-      toast({ title: 'Room type hidden', description: `${name} was removed from the public website and booking flow.` });
+      toast({ title: 'Room type deleted', description: `${name} was removed from the public website and booking flow. Historical reservations remain preserved.` });
       setConfirmDelete(null);
       await loadRooms();
     } catch (err) {
@@ -223,11 +223,15 @@ export default function AdminRoomsPage() {
                       <p className="text-xs text-muted-foreground">per night</p>
                     </div>
                     {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                    <Switch checked={room.isActive} disabled={savingId !== null} onCheckedChange={(c) => void handleActiveChange(room, c)} />
+                    <RoomVisibilitySwitch
+                      checked={room.isActive}
+                      disabled={savingId !== null}
+                      onCheckedChange={(checked) => void handleActiveChange(room, checked)}
+                    />
                     <Button variant="outline" size="sm" disabled={savingId !== null} onClick={() => setDialog({ mode: 'edit', id: room.id })}>Edit</Button>
-                    <Button variant="outline" size="sm" disabled={savingId !== null} onClick={() => setConfirmDelete(room.id)} aria-label="Hide room type from website">
+                    <Button variant="outline" size="sm" disabled={savingId !== null} onClick={() => setConfirmDelete(room.id)} aria-label="Delete room type">
                       <Trash2 className="h-4 w-4 text-destructive" />
-                      Hide from website
+                      Delete room type
                     </Button>
                   </div>
                 </div>
@@ -267,7 +271,11 @@ export default function AdminRoomsPage() {
                   </div>
                   <div className="flex items-center gap-3">
                     {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                    <Switch checked={room.isActive} disabled={savingId !== null} onCheckedChange={(c) => void handleActiveChange(room, c)} />
+                    <RoomVisibilitySwitch
+                      checked={room.isActive}
+                      disabled={savingId !== null}
+                      onCheckedChange={(checked) => void handleActiveChange(room, checked)}
+                    />
                     <Button variant="outline" size="sm" disabled={savingId !== null} onClick={() => setDialog({ mode: 'edit', id: room.id })}>Edit</Button>
                     <Button size="sm" disabled={savingId !== null} onClick={() => void handleActiveChange(room, true)}>Reactivate</Button>
                   </div>
@@ -295,17 +303,42 @@ export default function AdminRoomsPage() {
       <AlertDialog open={!!confirmDelete} onOpenChange={(o) => !o && setConfirmDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remove {deletingRoom?.name} from the website?</AlertDialogTitle>
+            <AlertDialogTitle>Delete {deletingRoom?.name} room type?</AlertDialogTitle>
             <AlertDialogDescription>
-              This hides the room type from public room listings, room detail pages, and new bookings. Historical reservations remain preserved.
+              This removes the room type from public room listings, room detail pages, and new bookings. Historical reservations remain preserved.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={savingId !== null}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDeleteRoom} disabled={savingId !== null} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Remove from website</AlertDialogAction>
+            <AlertDialogAction onClick={confirmDeleteRoom} disabled={savingId !== null} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete room type</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </div>
+  );
+}
+
+function RoomVisibilitySwitch({
+  checked,
+  disabled,
+  onCheckedChange,
+}: {
+  checked: boolean;
+  disabled: boolean;
+  onCheckedChange: (checked: boolean) => void;
+}) {
+  return (
+    <div className="flex flex-col items-center gap-1">
+      <Switch
+        checked={checked}
+        disabled={disabled}
+        onCheckedChange={onCheckedChange}
+        aria-label={checked ? 'Room type is active on the website' : 'Room type is hidden from the website'}
+        className="data-[state=checked]:bg-emerald-500 data-[state=unchecked]:bg-red-500"
+      />
+      <span className={checked ? 'text-[10px] font-medium text-emerald-700' : 'text-[10px] font-medium text-red-700'}>
+        {checked ? 'Active' : 'Hidden'}
+      </span>
     </div>
   );
 }
