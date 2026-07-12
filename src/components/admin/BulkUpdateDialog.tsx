@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { format, addDays, addYears, differenceInCalendarDays, getDay, startOfToday } from 'date-fns';
 import type { DateRange } from 'react-day-picker';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -12,8 +12,9 @@ import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Check, Pencil, AlertTriangle, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useInventoryStore, dateKey } from '@/store/inventoryStore';
+import { dateKey } from '@/store/inventoryStore';
 import { useToast } from '@/hooks/use-toast';
+import type { RoomType } from '@/types';
 
 type Step = 'dates' | 'updates' | 'review';
 type ChangeMode = 'no_change' | 'open' | 'close';
@@ -24,14 +25,22 @@ const WEEKDAYS = [
   { label: 'Wed', value: 3 }, { label: 'Thu', value: 4 }, { label: 'Fri', value: 5 }, { label: 'Sat', value: 6 },
 ];
 
-interface Props { open: boolean; onOpenChange: (o: boolean) => void; }
+interface BulkUpdatePayload {
+  roomId: string;
+  dates: string[];
+  patch: { inventory?: number; status?: 'open' | 'closed' };
+}
 
-export function BulkUpdateDialog({ open, onOpenChange }: Props) {
+interface Props {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  rooms: RoomType[];
+  onSubmit: (updates: BulkUpdatePayload[]) => Promise<void>;
+}
+
+export function BulkUpdateDialog({ open, onOpenChange, rooms, onSubmit }: Props) {
   const { toast } = useToast();
   const today = startOfToday();
-  const roomTypes = useInventoryStore(s => s.roomTypes);
-  const bulkUpdate = useInventoryStore(s => s.bulkUpdate);
-  const rooms = Object.values(roomTypes).filter(r => r.isActive);
 
   const [step, setStep] = useState<Step>('dates');
   const [range, setRange] = useState<DateRange | undefined>();
@@ -39,6 +48,12 @@ export function BulkUpdateDialog({ open, onOpenChange }: Props) {
   const [updates, setUpdates] = useState<Record<string, RoomUpdate>>(
     () => Object.fromEntries(rooms.map(r => [r.id, { inventory: '', mode: 'no_change' as ChangeMode }]))
   );
+
+  useEffect(() => {
+    if (open) {
+      setUpdates(Object.fromEntries(rooms.map(r => [r.id, { inventory: '', mode: 'no_change' as ChangeMode }])));
+    }
+  }, [open, rooms]);
 
   const reset = () => {
     setStep('dates'); setRange(undefined); setDays([0,1,2,3,4,5,6]);
@@ -58,7 +73,7 @@ export function BulkUpdateDialog({ open, onOpenChange }: Props) {
     if (value === '') return null;
     const n = Number(value);
     if (!Number.isFinite(n) || n < 0) return 'Must be 0 or more';
-    const base = roomTypes[roomId]?.baseInventory ?? 0;
+    const base = rooms.find(room => room.id === roomId)?.inventoryCount ?? 0;
     if (n > base) return `Max ${base} (set in Rooms)`;
     return null;
   };
@@ -68,17 +83,27 @@ export function BulkUpdateDialog({ open, onOpenChange }: Props) {
   const canNextDates = !!(range?.from && range?.to && daysCount > 0);
   const canPreview = activeUpdates.length > 0 && !hasInventoryErrors;
 
-  const submit = () => {
+  const submit = async () => {
     const keys = selectedDates.map(dateKey);
+    const payload: BulkUpdatePayload[] = [];
     for (const [id, u] of activeUpdates) {
       const patch: { inventory?: number; status?: 'open' | 'closed' } = {};
       if (u.inventory !== '') patch.inventory = Number(u.inventory);
       if (u.mode === 'open') patch.status = 'open';
       if (u.mode === 'close') patch.status = 'closed';
-      bulkUpdate(id, keys, patch);
+      payload.push({ roomId: id, dates: keys, patch });
     }
-    toast({ title: 'Availability updated', description: `${activeUpdates.length} room type(s) updated across ${daysCount} day(s).` });
-    close(false);
+    try {
+      await onSubmit(payload);
+      toast({ title: 'Availability updated', description: `${activeUpdates.length} room type(s) updated across ${daysCount} day(s).` });
+      close(false);
+    } catch (error) {
+      toast({
+        title: 'Unable to update availability',
+        description: error instanceof Error ? error.message : 'Please try again.',
+        variant: 'destructive',
+      });
+    }
   };
 
   return (
@@ -206,13 +231,13 @@ export function BulkUpdateDialog({ open, onOpenChange }: Props) {
                     <div key={r.id} className="space-y-2">
                       <div className="flex items-baseline justify-between">
                         <p className="font-medium text-sm">{r.name}</p>
-                        <p className="text-[10px] text-muted-foreground">Base inventory: {r.baseInventory}</p>
+                        <p className="text-[10px] text-muted-foreground">Base inventory: {r.inventoryCount}</p>
                       </div>
                       <div className="grid grid-cols-[1fr_1fr] gap-3">
                         <div>
-                          <Label className="text-xs text-muted-foreground">Inventory (max {r.baseInventory})</Label>
+                          <Label className="text-xs text-muted-foreground">Inventory (max {r.inventoryCount})</Label>
                           <Input
-                            type="number" min={0} max={r.baseInventory} placeholder=""
+                            type="number" min={0} max={r.inventoryCount} placeholder=""
                             value={updates[r.id].inventory}
                             onChange={(e) => setUpdates(p => ({ ...p, [r.id]: { ...p[r.id], inventory: e.target.value }}))}
                             className={cn(err && 'border-destructive focus-visible:ring-destructive')}

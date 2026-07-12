@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { z } from 'zod';
 import { pool, withTransaction } from '../db.js';
 import { asyncHandler, requireAdmin, requireAuth } from '../middleware.js';
 import {
@@ -12,12 +13,21 @@ import {
 import { audit, paymentFromRow, reservationFromRow, roomFromRow } from '../transformers.js';
 import { getBookedCount } from '../services/availability.js';
 import { slugify } from '../services/rooms.js';
-import { notFound } from '../errors.js';
+import { badRequest, notFound } from '../errors.js';
 import { config } from '../config.js';
+import { addDaysKey, hotelTodayKey } from '../date-utils.js';
 
 export const adminRouter = Router();
 
 adminRouter.use(requireAuth, requireAdmin);
+
+const calendarQuerySchema = z.object({
+  start: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  days: z.coerce.number().int().min(1).max(31).default(14),
+  roomId: z.union([z.literal('all'), z.string().uuid()]).default('all'),
+});
+
+const ACTIVE_HOLD_STATUSES = ['pending', 'confirmed', 'checked_in'];
 
 adminRouter.get('/dashboard', asyncHandler(async (_req, res) => {
   const stats = await pool.query(
@@ -60,6 +70,70 @@ adminRouter.get('/dashboard', asyncHandler(async (_req, res) => {
 adminRouter.get('/rooms', asyncHandler(async (_req, res) => {
   const result = await pool.query(`select *, $1::numeric as tax_rate from room_types order by sort_order, name`, [config.TAX_RATE]);
   res.json(result.rows.map(roomFromRow));
+}));
+
+adminRouter.get('/calendar', asyncHandler(async (req, res) => {
+  const input = calendarQuerySchema.parse(req.query);
+  const start = input.start ?? hotelTodayKey();
+  const dates = Array.from({ length: input.days }, (_, index) => addDaysKey(start, index));
+  const roomParams = input.roomId === 'all' ? [] : [input.roomId];
+  const roomsResult = await pool.query(
+    `select *, $1::numeric as tax_rate
+     from room_types
+     where is_active = true
+       and ($2::uuid is null or id = $2::uuid)
+     order by sort_order, name`,
+    [config.TAX_RATE, roomParams[0] ?? null],
+  );
+
+  const rooms = [];
+  const occupancy = dates.map(date => ({ date, booked: 0, total: 0, pct: 0 }));
+
+  for (const row of roomsResult.rows) {
+    const days = [];
+    for (const date of dates) {
+      const dayResult = await pool.query(
+        `select
+           coalesce(io.inventory, $2)::int as inventory,
+           coalesce(io.status, 'open')::text as status,
+           coalesce(ro.rate, round($3::numeric * case when extract(dow from $4::date) in (0,6) then 1.10 else 1.00 end)::int)::int as rate,
+           coalesce(sum(rn.rooms) filter (where r.status = any($5::reservation_status[])), 0)::int as booked
+         from (select $1::uuid as room_type_id, $4::date as stay_date) d
+         left join inventory_overrides io on io.room_type_id = d.room_type_id and io.stay_date = d.stay_date
+         left join rate_overrides ro on ro.room_type_id = d.room_type_id and ro.stay_date = d.stay_date
+         left join reservation_nights rn on rn.room_type_id = d.room_type_id and rn.stay_date = d.stay_date
+         left join reservations r on r.id = rn.reservation_id
+         group by io.inventory, io.status, ro.rate`,
+        [row.id, row.base_inventory, row.base_price, date, ACTIVE_HOLD_STATUSES],
+      );
+      const day = dayResult.rows[0];
+      const inventory = Number(day.inventory);
+      const booked = Number(day.booked);
+      const status = String(day.status) as 'open' | 'closed';
+      const remaining = status === 'closed' ? 0 : Math.max(0, inventory - booked);
+      const occupancyDay = occupancy.find(item => item.date === date)!;
+      occupancyDay.booked += booked;
+      occupancyDay.total += status === 'closed' ? 0 : inventory;
+      days.push({
+        date,
+        inventory,
+        booked,
+        remaining,
+        status,
+        rate: Number(day.rate),
+      });
+    }
+    rooms.push({
+      roomType: roomFromRow(row),
+      days,
+    });
+  }
+
+  for (const day of occupancy) {
+    day.pct = day.total ? day.booked / day.total : 0;
+  }
+
+  res.json({ start, dates, rooms, occupancy });
 }));
 
 adminRouter.post('/rooms', asyncHandler(async (req, res) => {
@@ -117,7 +191,15 @@ adminRouter.post('/rates/set', asyncHandler(async (req, res) => {
 
 adminRouter.post('/inventory/remaining', asyncHandler(async (req, res) => {
   const input = remainingWriteSchema.parse(req.body);
+  const room = await pool.query(`select base_inventory from room_types where id = $1`, [input.roomId]);
+  if (!room.rowCount) throw notFound('room_not_found', 'Room type was not found.');
   const booked = await getBookedCount(pool, input.roomId, input.date);
+  if (input.remaining + booked > Number(room.rows[0].base_inventory)) {
+    throw badRequest('inventory_exceeded', 'Remaining availability cannot exceed room inventory.', {
+      booked,
+      maxRemaining: Math.max(0, Number(room.rows[0].base_inventory) - booked),
+    });
+  }
   const inventory = booked + input.remaining;
   await pool.query(
     `insert into inventory_overrides(room_type_id, stay_date, inventory, updated_by, updated_at)
@@ -133,6 +215,13 @@ adminRouter.post('/inventory/remaining', asyncHandler(async (req, res) => {
 adminRouter.post('/inventory/bulk', asyncHandler(async (req, res) => {
   const input = bulkInventorySchema.parse(req.body);
   await withTransaction(async client => {
+    const room = await client.query(`select base_inventory from room_types where id = $1`, [input.roomId]);
+    if (!room.rowCount) throw notFound('room_not_found', 'Room type was not found.');
+    if (input.patch.inventory != null && input.patch.inventory > Number(room.rows[0].base_inventory)) {
+      throw badRequest('inventory_exceeded', 'Inventory cannot exceed the room type base inventory.', {
+        maxInventory: Number(room.rows[0].base_inventory),
+      });
+    }
     for (const date of input.dates) {
       await client.query(
         `insert into inventory_overrides(room_type_id, stay_date, inventory, status, updated_by, updated_at)

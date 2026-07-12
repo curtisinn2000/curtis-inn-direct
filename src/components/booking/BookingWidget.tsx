@@ -10,6 +10,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar as CalendarIcon, Users, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { earliestPublicCheckInDate } from '@/lib/bookingDates';
 
 export function BookingWidget() {
   const navigate = useNavigate();
@@ -18,6 +19,7 @@ export function BookingWidget() {
   const [open, setOpen] = useState(false);
   const [guests, setGuests] = useState('2');
   const [rooms, setRooms] = useState('1');
+  const earliestCheckIn = earliestPublicCheckInDate();
 
   const handleSearch = () => {
     if (!range?.from || !range?.to) return;
@@ -69,8 +71,8 @@ export function BookingWidget() {
                   if (r?.from && r?.to) setOpen(false);
                 }}
                 numberOfMonths={isMobile ? 1 : 2}
-                defaultMonth={range?.from ?? new Date()}
-                disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                defaultMonth={range?.from ?? earliestCheckIn}
+                disabled={(date) => date < earliestCheckIn}
                 initialFocus
                 className="p-4 pointer-events-auto [&_.rdp-day]:h-11 [&_.rdp-day]:w-11 [&_.rdp-day]:text-base [&_.rdp-head_cell]:w-11 [&_.rdp-caption_label]:text-base [&_.rdp-caption_label]:font-semibold"
               />

@@ -9,6 +9,8 @@ import type {
   RoomRateRule,
   PromoCode,
   AuditLog,
+  AdminCalendarResponse,
+  InventoryStatus,
 } from '@/types';
 import { apiRequest, jsonBody } from './client';
 
@@ -42,6 +44,39 @@ export async function getDashboardStats(): Promise<DashboardStats> {
 
 export async function getReservations(): Promise<Reservation[]> {
   return apiRequest<Reservation[]>('/admin/reservations');
+}
+
+export async function getAdminCalendar(params: {
+  start: string;
+  days: number;
+  roomId?: string;
+}): Promise<AdminCalendarResponse> {
+  const query = new URLSearchParams({
+    start: params.start,
+    days: String(params.days),
+    roomId: params.roomId ?? 'all',
+  });
+  return apiRequest<AdminCalendarResponse>(`/admin/calendar?${query.toString()}`);
+}
+
+export async function setRoomRate(roomId: string, date: string, rate: number): Promise<{ ok: true }> {
+  return apiRequest<{ ok: true }>('/admin/rates/set', jsonBody({ roomId, date, rate }));
+}
+
+export async function setRemainingAvailability(
+  roomId: string,
+  date: string,
+  remaining: number,
+): Promise<{ ok: true; inventory: number; booked: number }> {
+  return apiRequest<{ ok: true; inventory: number; booked: number }>('/admin/inventory/remaining', jsonBody({ roomId, date, remaining }));
+}
+
+export async function bulkUpdateInventory(
+  roomId: string,
+  dates: string[],
+  patch: { inventory?: number; status?: InventoryStatus },
+): Promise<{ ok: true }> {
+  return apiRequest<{ ok: true }>('/admin/inventory/bulk', jsonBody({ roomId, dates, patch }));
 }
 
 export async function getReservationById(id: string): Promise<Reservation | null> {

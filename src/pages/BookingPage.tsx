@@ -9,6 +9,7 @@ import { searchAvailability } from '@/services/api';
 import type { AvailabilityResult, AvailabilitySearch } from '@/types';
 import { Users, BedDouble, Calendar, Loader2 } from 'lucide-react';
 import roomImg from '@/assets/room-king.jpg';
+import { addDaysKey, earliestPublicCheckInKey } from '@/lib/bookingDates';
 
 export default function BookingPage() {
   const [searchParams] = useSearchParams();
@@ -23,6 +24,9 @@ export default function BookingPage() {
   const [results, setResults] = useState<AvailabilityResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
+  const [error, setError] = useState('');
+  const minCheckIn = earliestPublicCheckInKey();
+  const minCheckOut = search.checkIn ? addDaysKey(search.checkIn, 1) : addDaysKey(minCheckIn, 1);
 
   useEffect(() => {
     if (search.checkIn && search.checkOut) {
@@ -33,11 +37,28 @@ export default function BookingPage() {
 
   const handleSearch = async () => {
     if (!search.checkIn || !search.checkOut) return;
+    if (search.checkIn < minCheckIn) {
+      setError(`Online bookings must start on ${minCheckIn} or later.`);
+      setResults([]);
+      setSearched(true);
+      return;
+    }
+    if (search.checkOut <= search.checkIn) {
+      setError('Check-out must be after check-in.');
+      setResults([]);
+      setSearched(true);
+      return;
+    }
     setLoading(true);
+    setError('');
     try {
       const data = await searchAvailability(search);
       setResults(data);
       setSearched(true);
+    } catch (err) {
+      setResults([]);
+      setSearched(true);
+      setError(err instanceof Error ? err.message : 'Unable to search availability.');
     } finally {
       setLoading(false);
     }
@@ -73,13 +94,26 @@ export default function BookingPage() {
               <Label className="text-xs text-muted-foreground mb-1.5 flex items-center gap-1">
                 <Calendar className="h-3 w-3" /> Check-in
               </Label>
-              <Input type="date" value={search.checkIn} onChange={e => setSearch(s => ({ ...s, checkIn: e.target.value }))} />
+              <Input
+                type="date"
+                min={minCheckIn}
+                value={search.checkIn}
+                onChange={e => setSearch(s => {
+                  const checkIn = e.target.value;
+                  const minOut = checkIn ? addDaysKey(checkIn, 1) : '';
+                  return {
+                    ...s,
+                    checkIn,
+                    checkOut: s.checkOut && minOut && s.checkOut < minOut ? minOut : s.checkOut,
+                  };
+                })}
+              />
             </div>
             <div>
               <Label className="text-xs text-muted-foreground mb-1.5 flex items-center gap-1">
                 <Calendar className="h-3 w-3" /> Check-out
               </Label>
-              <Input type="date" value={search.checkOut} onChange={e => setSearch(s => ({ ...s, checkOut: e.target.value }))} />
+              <Input type="date" min={minCheckOut} value={search.checkOut} onChange={e => setSearch(s => ({ ...s, checkOut: e.target.value }))} />
             </div>
             <div>
               <Label className="text-xs text-muted-foreground mb-1.5">Guests</Label>
@@ -94,6 +128,12 @@ export default function BookingPage() {
             </Button>
           </div>
         </Card>
+
+        {!loading && error && (
+          <div className="mb-8 rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+            {error}
+          </div>
+        )}
 
         {/* Results */}
         {loading && (

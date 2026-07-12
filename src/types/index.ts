@@ -132,6 +132,36 @@ export interface RoomInventoryDay {
   rate: number;
 }
 
+export type InventoryStatus = 'open' | 'closed';
+
+export interface AdminCalendarDay {
+  date: string;
+  inventory: number;
+  booked: number;
+  remaining: number;
+  status: InventoryStatus;
+  rate: number;
+}
+
+export interface AdminCalendarRoom {
+  roomType: RoomType;
+  days: AdminCalendarDay[];
+}
+
+export interface AdminCalendarOccupancy {
+  date: string;
+  booked: number;
+  total: number;
+  pct: number;
+}
+
+export interface AdminCalendarResponse {
+  start: string;
+  dates: string[];
+  rooms: AdminCalendarRoom[];
+  occupancy: AdminCalendarOccupancy[];
+}
+
 // --- Promo Codes ---
 export interface PromoCode {
   id: string;

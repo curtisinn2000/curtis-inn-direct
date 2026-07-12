@@ -1,4 +1,5 @@
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
+const HOTEL_TIME_ZONE = 'America/New_York';
 
 export function parseDateOnly(value: string): Date {
   const [year, month, day] = value.split('-').map(Number);
@@ -20,6 +21,27 @@ export function eachStayDate(checkIn: string, checkOut: string): string[] {
 
 export function todayKey(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+export function hotelTodayKey(now = new Date()): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: HOTEL_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now);
+  const value = (type: string) => parts.find(part => part.type === type)?.value;
+  return `${value('year')}-${value('month')}-${value('day')}`;
+}
+
+export function addDaysKey(dateKey: string, days: number): string {
+  const d = parseDateOnly(dateKey);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+export function earliestPublicCheckInKey(now = new Date()): string {
+  return addDaysKey(hotelTodayKey(now), 1);
 }
 
 export function addYearsKey(years: number): string {

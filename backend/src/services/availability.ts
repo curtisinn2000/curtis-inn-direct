@@ -1,5 +1,5 @@
 import type { DbClient } from '../db.js';
-import { addYearsKey, diffDays, eachStayDate, isWeekend, todayKey } from '../date-utils.js';
+import { addYearsKey, diffDays, eachStayDate, earliestPublicCheckInKey, isWeekend } from '../date-utils.js';
 import { badRequest } from '../errors.js';
 import { config } from '../config.js';
 import { roomFromRow } from '../transformers.js';
@@ -15,7 +15,12 @@ export type AvailabilityInput = {
 
 export function validateStayWindow(input: Pick<AvailabilityInput, 'checkIn' | 'checkOut'>) {
   const nights = diffDays(input.checkIn, input.checkOut);
-  if (input.checkIn < todayKey()) throw badRequest('past_date', 'Check-in date cannot be in the past.');
+  const earliestCheckIn = earliestPublicCheckInKey();
+  if (input.checkIn < earliestCheckIn) {
+    throw badRequest('past_or_same_day_check_in', 'Online bookings must start at least one day after today.', {
+      earliestCheckIn,
+    });
+  }
   if (input.checkOut > addYearsKey(2)) throw badRequest('date_too_far', 'Bookings are limited to two years from today.');
   if (nights < 1) throw badRequest('invalid_dates', 'Check-out must be after check-in.');
   if (nights > 30) throw badRequest('stay_too_long', 'Stays longer than 30 nights require direct contact.');
