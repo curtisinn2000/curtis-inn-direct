@@ -109,7 +109,7 @@ export default function HomePage() {
               <p className="mt-2 whitespace-nowrap text-[13px] font-semibold leading-none sm:text-lg lg:text-xl">{PROPERTY.tagline}</p>
             </div>
             <p className="text-body-lg text-primary-foreground/95 mb-8 [text-shadow:0_1px_8px_rgb(0_0_0_/_0.6)]">
-              {hero?.heroDescription || 'Affordable comfort steps from Hollywood Beach. Free parking, pool, and Wi-Fi. Book direct for the best rates.'}
+              {hero?.heroDescription || 'Affordable comfort steps from Hollywood Beach. Free parking, pool, and Wi-Fi'}
             </p>
             <div className="flex gap-3">
               <Button size="lg" asChild className="bg-accent text-accent-foreground hover:bg-accent/90 shadow-lg">
