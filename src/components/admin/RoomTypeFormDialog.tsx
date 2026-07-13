@@ -6,8 +6,9 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, ArrowRight, Star, Trash2, Upload } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Star, Trash2, Upload } from 'lucide-react';
 import { uploadContentImage } from '@/services/api';
+import type { RoomOptionsCatalog } from '@/types';
 
 export interface RoomFormValues {
   name: string;
@@ -19,6 +20,9 @@ export interface RoomFormValues {
   baseInventory: number;
   isActive: boolean;
   images: string[];
+  amenities: string[];
+  policies: string[];
+  cancellationTerms: string;
 }
 
 export type RoomTypeFormInitial = RoomFormValues & {
@@ -31,6 +35,7 @@ interface Props {
   open: boolean;
   mode: 'add' | 'edit';
   initial?: RoomTypeFormInitial;
+  options?: RoomOptionsCatalog;
   onClose: () => void;
   onSubmit: (values: RoomFormValues) => void;
 }
@@ -40,13 +45,17 @@ const MAX_BYTES = 5 * 1024 * 1024;
 const MAX_SOURCE_BYTES = 25 * 1024 * 1024;
 const MAX_IMAGE_DIMENSION = 1800;
 const ACCEPT = ['image/jpeg', 'image/png', 'image/webp'];
+const DEFAULT_CANCELLATION_TERMS = 'Free cancellation up to 48 hours before check-in.';
 
-export function RoomTypeFormDialog({ open, mode, initial, onClose, onSubmit }: Props) {
+export function RoomTypeFormDialog({ open, mode, initial, options, onClose, onSubmit }: Props) {
   const { toast } = useToast();
   const [uploading, setUploading] = useState(false);
   const [v, setV] = useState<RoomFormValues>({
     name: '', shortDescription: '', longDescription: '',
     occupancy: 2, bedType: 'Queen', basePrice: 0, baseInventory: 0, isActive: true, images: [],
+    amenities: [],
+    policies: [],
+    cancellationTerms: DEFAULT_CANCELLATION_TERMS,
   });
 
   useEffect(() => {
@@ -62,9 +71,25 @@ export function RoomTypeFormDialog({ open, mode, initial, onClose, onSubmit }: P
         baseInventory: initial.baseInventory,
         isActive: initial.isActive,
         images: initial.images,
+        amenities: initial.amenities,
+        policies: initial.policies,
+        cancellationTerms: initial.cancellationTerms,
       });
     } else {
-      setV({ name: '', shortDescription: '', longDescription: '', occupancy: 2, bedType: 'Queen', basePrice: 0, baseInventory: 0, isActive: true, images: [] });
+      setV({
+        name: '',
+        shortDescription: '',
+        longDescription: '',
+        occupancy: 2,
+        bedType: 'Queen',
+        basePrice: 0,
+        baseInventory: 0,
+        isActive: true,
+        images: [],
+        amenities: defaultSelections(options?.amenities.map(option => option.label) ?? []),
+        policies: defaultSelections(options?.policies.map(option => option.label) ?? []),
+        cancellationTerms: DEFAULT_CANCELLATION_TERMS,
+      });
     }
     // Initialize when opening or switching rooms. Do not reset on parent re-renders
     // from toast/status updates, because that wipes unsaved photo uploads.
@@ -149,6 +174,17 @@ export function RoomTypeFormDialog({ open, mode, initial, onClose, onSubmit }: P
   };
   const remove = (i: number) => setV(s => ({ ...s, images: s.images.filter((_, k) => k !== i) }));
 
+  const toggleListValue = (field: 'amenities' | 'policies', label: string) => {
+    setV(current => {
+      const values = current[field];
+      const exists = values.includes(label);
+      return {
+        ...current,
+        [field]: exists ? values.filter(value => value !== label) : [...values, label],
+      };
+    });
+  };
+
   const canSave = v.name.trim().length > 0 && v.basePrice >= 0 && v.baseInventory >= 0 && !uploading;
 
   const save = () => {
@@ -210,6 +246,34 @@ export function RoomTypeFormDialog({ open, mode, initial, onClose, onSubmit }: P
               <div className="text-xs text-muted-foreground">Inactive rooms are hidden from public listings.</div>
             </div>
             <Switch checked={v.isActive} onCheckedChange={(c) => setV(s => ({ ...s, isActive: c }))} />
+          </div>
+
+          <RoomOptionPicker
+            title="Room Amenities"
+            description="Selected amenities appear on the public room detail page."
+            options={options?.amenities.map(option => option.label) ?? []}
+            selected={v.amenities}
+            emptyLabel="No amenity options yet. Add amenities in Content Management."
+            onToggle={label => toggleListValue('amenities', label)}
+          />
+
+          <RoomOptionPicker
+            title="Policies"
+            description="Selected policies appear on the public room detail page for this room."
+            options={options?.policies.map(option => option.label) ?? []}
+            selected={v.policies}
+            emptyLabel="No policy options yet. Add policies in Content Management."
+            onToggle={label => toggleListValue('policies', label)}
+          />
+
+          <div>
+            <Label className="text-xs">Cancellation terms</Label>
+            <Textarea
+              rows={2}
+              value={v.cancellationTerms}
+              onChange={e => setV(s => ({ ...s, cancellationTerms: e.target.value }))}
+              placeholder="Free cancellation up to 48 hours before check-in."
+            />
           </div>
 
           {/* Photos */}
@@ -296,4 +360,57 @@ function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality: number):
 
 function replaceExtension(name: string, ext: string) {
   return name.replace(/\.[^.]+$/, '') + `.${ext}`;
+}
+
+function defaultSelections(labels: string[]) {
+  return labels.slice(0, 4);
+}
+
+function RoomOptionPicker({
+  title,
+  description,
+  options,
+  selected,
+  emptyLabel,
+  onToggle,
+}: {
+  title: string;
+  description: string;
+  options: string[];
+  selected: string[];
+  emptyLabel: string;
+  onToggle: (label: string) => void;
+}) {
+  return (
+    <div className="rounded-md border p-3">
+      <div className="mb-3">
+        <div className="text-sm font-medium">{title}</div>
+        <div className="text-xs text-muted-foreground">{description}</div>
+      </div>
+      {options.length === 0 ? (
+        <p className="text-xs text-muted-foreground">{emptyLabel}</p>
+      ) : (
+        <div className="grid gap-2 sm:grid-cols-2">
+          {options.map(option => {
+            const checked = selected.includes(option);
+            return (
+              <button
+                key={option}
+                type="button"
+                onClick={() => onToggle(option)}
+                className={`flex min-h-9 items-center gap-2 rounded-md border px-3 py-2 text-left text-xs transition ${
+                  checked ? 'border-primary bg-primary/10 text-foreground' : 'border-border hover:border-primary/50'
+                }`}
+              >
+                <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${checked ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground/40'}`}>
+                  {checked && <Check className="h-3 w-3" />}
+                </span>
+                <span>{option}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 }

@@ -223,6 +223,17 @@ export interface Review {
   sortOrder?: number;
 }
 
+export interface RoomOption {
+  id: string;
+  label: string;
+  sortOrder: number;
+}
+
+export interface RoomOptionsCatalog {
+  amenities: RoomOption[];
+  policies: RoomOption[];
+}
+
 export interface WebsiteContent {
   hero: PropertyContent;
   faqs: FAQ[];

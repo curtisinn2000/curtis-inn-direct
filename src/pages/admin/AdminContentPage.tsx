@@ -15,17 +15,22 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import type { FAQ, GalleryImage, NearbyAttraction, PropertyContent, Review, WebsiteContent } from '@/types';
+import type { FAQ, GalleryImage, NearbyAttraction, PropertyContent, Review, RoomOption, RoomOptionsCatalog, WebsiteContent } from '@/types';
 import {
+  createRoomAmenityOption,
   createAttraction,
   createFaq,
   createGalleryImage,
+  createRoomPolicyOption,
   createReview,
+  deleteRoomAmenityOption,
   deleteAttraction,
   deleteFaq,
   deleteGalleryImage,
+  deleteRoomPolicyOption,
   deleteReview,
   getAdminWebsiteContent,
+  getRoomOptionsCatalog,
   updateHeroContent,
   uploadContentImage,
 } from '@/services/api';
@@ -59,13 +64,15 @@ type GalleryUploadItem = {
 export default function AdminContentPage() {
   const { toast } = useToast();
   const [content, setContent] = useState<WebsiteContent>(emptyContent);
+  const [roomOptions, setRoomOptions] = useState<RoomOptionsCatalog>({ amenities: [], policies: [] });
   const [hero, setHero] = useState<PropertyContent>(emptyContent.hero);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [dialog, setDialog] = useState<'faq' | 'gallery' | 'review' | 'attraction' | null>(null);
+  const [dialog, setDialog] = useState<'faq' | 'gallery' | 'review' | 'attraction' | 'amenity' | 'policy' | null>(null);
   const [galleryFiles, setGalleryFiles] = useState<GalleryUploadItem[]>([]);
   const [attractionFile, setAttractionFile] = useState<File | null>(null);
   const [attractionPreview, setAttractionPreview] = useState('');
+  const [roomOptionForm, setRoomOptionForm] = useState({ label: '' });
   const [faqForm, setFaqForm] = useState<Omit<FAQ, 'id'>>({ question: '', answer: '', category: 'General', sortOrder: 0 });
   const [galleryForm, setGalleryForm] = useState<Omit<GalleryImage, 'id'>>({ url: '', alt: '', category: 'exterior', sortOrder: 0 });
   const [reviewForm, setReviewForm] = useState<Omit<Review, 'id'>>({
@@ -89,9 +96,13 @@ export default function AdminContentPage() {
   const loadContent = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await getAdminWebsiteContent();
+      const [data, optionData] = await Promise.all([
+        getAdminWebsiteContent(),
+        getRoomOptionsCatalog(),
+      ]);
       setContent(data);
       setHero(data.hero);
+      setRoomOptions(optionData);
     } catch (err) {
       toast({
         title: 'Unable to load content',
@@ -220,6 +231,44 @@ export default function AdminContentPage() {
     }
   }
 
+  async function submitAmenity(event: FormEvent) {
+    event.preventDefault();
+    setSaving(true);
+    try {
+      await createRoomAmenityOption({
+        label: roomOptionForm.label,
+        sortOrder: nextSort(roomOptions.amenities),
+      });
+      setRoomOptionForm({ label: '' });
+      setDialog(null);
+      await loadContent();
+      toast({ title: 'Amenity added', description: 'The amenity is now available for room type selection.' });
+    } catch (err) {
+      showError('Amenity was not added', err);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function submitPolicy(event: FormEvent) {
+    event.preventDefault();
+    setSaving(true);
+    try {
+      await createRoomPolicyOption({
+        label: roomOptionForm.label,
+        sortOrder: nextSort(roomOptions.policies),
+      });
+      setRoomOptionForm({ label: '' });
+      setDialog(null);
+      await loadContent();
+      toast({ title: 'Policy added', description: 'The policy is now available for room type selection.' });
+    } catch (err) {
+      showError('Policy was not added', err);
+    } finally {
+      setSaving(false);
+    }
+  }
+
   function validateImageFile(file: File) {
     if (!allowedImageTypes.includes(file.type)) {
       throw new Error('Only JPG, PNG, and WebP images can be uploaded.');
@@ -304,16 +353,26 @@ export default function AdminContentPage() {
     });
   }
 
-  async function removeItem(kind: 'faq' | 'gallery' | 'review' | 'attraction', id: string, label: string) {
-    if (!window.confirm(`Delete "${label}" from the website?`)) return;
+  async function removeItem(kind: 'faq' | 'gallery' | 'review' | 'attraction' | 'amenity' | 'policy', id: string, label: string) {
+    const message = kind === 'amenity' || kind === 'policy'
+      ? `Delete "${label}" from future room selections? Existing rooms that already use this text will keep it until edited.`
+      : `Delete "${label}" from the website?`;
+    if (!window.confirm(message)) return;
     setSaving(true);
     try {
       if (kind === 'faq') await deleteFaq(id);
       if (kind === 'gallery') await deleteGalleryImage(id);
       if (kind === 'review') await deleteReview(id);
       if (kind === 'attraction') await deleteAttraction(id);
+      if (kind === 'amenity') await deleteRoomAmenityOption(id);
+      if (kind === 'policy') await deleteRoomPolicyOption(id);
       await loadContent();
-      toast({ title: 'Content deleted', description: `${label} was removed from the website.` });
+      toast({
+        title: kind === 'amenity' || kind === 'policy' ? 'Option deleted' : 'Content deleted',
+        description: kind === 'amenity' || kind === 'policy'
+          ? `${label} was removed from future room selections.`
+          : `${label} was removed from the website.`,
+      });
     } catch (err) {
       showError('Content was not deleted', err);
     } finally {
@@ -344,6 +403,8 @@ export default function AdminContentPage() {
           <TabsTrigger value="gallery">Gallery</TabsTrigger>
           <TabsTrigger value="reviews">Reviews</TabsTrigger>
           <TabsTrigger value="attractions">Attractions</TabsTrigger>
+          <TabsTrigger value="amenities">Amenities</TabsTrigger>
+          <TabsTrigger value="policies">Policies</TabsTrigger>
         </TabsList>
 
         <TabsContent value="hero">
@@ -457,6 +518,36 @@ export default function AdminContentPage() {
             </Button>
           </div>
         </TabsContent>
+
+        <TabsContent value="amenities">
+          <RoomOptionList
+            title="Room amenities"
+            description="Reusable amenity options shown while adding or editing room types."
+            emptyLabel="No amenity options yet."
+            options={roomOptions.amenities}
+            saving={saving}
+            onAdd={() => {
+              setRoomOptionForm({ label: '' });
+              setDialog('amenity');
+            }}
+            onDelete={(option) => removeItem('amenity', option.id, option.label)}
+          />
+        </TabsContent>
+
+        <TabsContent value="policies">
+          <RoomOptionList
+            title="Room policies"
+            description="Reusable policy options shown while adding or editing room types."
+            emptyLabel="No policy options yet."
+            options={roomOptions.policies}
+            saving={saving}
+            onAdd={() => {
+              setRoomOptionForm({ label: '' });
+              setDialog('policy');
+            }}
+            onDelete={(option) => removeItem('policy', option.id, option.label)}
+          />
+        </TabsContent>
       </Tabs>
 
       <Dialog open={dialog === 'faq'} onOpenChange={open => !open && setDialog(null)}>
@@ -562,6 +653,32 @@ export default function AdminContentPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={dialog === 'amenity'} onOpenChange={open => !open && setDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Amenity</DialogTitle>
+            <DialogDescription>This amenity will be available for room type selection.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={submitAmenity} className="space-y-4">
+            <Field label="Amenity"><Input required value={roomOptionForm.label} onChange={event => setRoomOptionForm({ label: event.target.value })} placeholder="e.g. Microwave" /></Field>
+            <DialogFooter><Button type="submit" disabled={saving}>Add Amenity</Button></DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={dialog === 'policy'} onOpenChange={open => !open && setDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Policy</DialogTitle>
+            <DialogDescription>This policy will be available for room type selection.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={submitPolicy} className="space-y-4">
+            <Field label="Policy"><Input required value={roomOptionForm.label} onChange={event => setRoomOptionForm({ label: event.target.value })} placeholder="e.g. No smoking" /></Field>
+            <DialogFooter><Button type="submit" disabled={saving}>Add Policy</Button></DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -571,6 +688,54 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
     <div className="space-y-2">
       <Label>{label}</Label>
       {children}
+    </div>
+  );
+}
+
+function RoomOptionList({
+  title,
+  description,
+  emptyLabel,
+  options,
+  saving,
+  onAdd,
+  onDelete,
+}: {
+  title: string;
+  description: string;
+  emptyLabel: string;
+  options: RoomOption[];
+  saving: boolean;
+  onAdd: () => void;
+  onDelete: (option: RoomOption) => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-semibold">{title}</h2>
+          <p className="text-sm text-muted-foreground">{description}</p>
+        </div>
+        <Button onClick={onAdd} disabled={saving}>
+          <Plus className="mr-1 h-4 w-4" /> Add
+        </Button>
+      </div>
+
+      {options.length === 0 ? (
+        <Card className="p-6 text-sm text-muted-foreground">{emptyLabel}</Card>
+      ) : (
+        options.map(option => (
+          <Card key={option.id} className="flex items-center justify-between gap-4 p-4">
+            <div>
+              <p className="font-medium text-sm">{option.label}</p>
+              <p className="text-xs text-muted-foreground">Available for room type selection</p>
+            </div>
+            <Button variant="ghost" size="icon" onClick={() => onDelete(option)} disabled={saving} aria-label={`Delete ${option.label}`}>
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </Card>
+        ))
+      )}
     </div>
   );
 }

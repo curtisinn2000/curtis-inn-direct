@@ -18,6 +18,8 @@ import type {
   NearbyAttraction,
   PropertyContent,
   Review,
+  RoomOption,
+  RoomOptionsCatalog,
   WebsiteContent,
 } from '@/types';
 import { apiRequest, jsonBody } from './client';
@@ -133,6 +135,26 @@ export async function createAttraction(data: Omit<NearbyAttraction, 'id'>): Prom
 
 export async function deleteAttraction(id: string): Promise<{ ok: true }> {
   return apiRequest<{ ok: true }>(`/admin/content/attractions/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+export async function getRoomOptionsCatalog(): Promise<RoomOptionsCatalog> {
+  return apiRequest<RoomOptionsCatalog>('/admin/content/room-options');
+}
+
+export async function createRoomAmenityOption(data: { label: string; sortOrder?: number }): Promise<RoomOption> {
+  return apiRequest<RoomOption>('/admin/content/amenities', jsonBody(data));
+}
+
+export async function deleteRoomAmenityOption(id: string): Promise<{ ok: true }> {
+  return apiRequest<{ ok: true }>(`/admin/content/amenities/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+export async function createRoomPolicyOption(data: { label: string; sortOrder?: number }): Promise<RoomOption> {
+  return apiRequest<RoomOption>('/admin/content/policies', jsonBody(data));
+}
+
+export async function deleteRoomPolicyOption(id: string): Promise<{ ok: true }> {
+  return apiRequest<{ ok: true }>(`/admin/content/policies/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
 
 export async function getAdminRoomTypes(): Promise<RoomType[]> {

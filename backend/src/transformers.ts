@@ -145,6 +145,14 @@ export function attractionFromRow(row: DbRow) {
   };
 }
 
+export function roomOptionFromRow(row: DbRow) {
+  return {
+    id: asString(row.id),
+    label: asString(row.label),
+    sortOrder: asNumber(row.sort_order),
+  };
+}
+
 export function centsToDollars(cents: number): number {
   return Math.round(Number(cents)) / 100;
 }

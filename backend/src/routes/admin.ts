@@ -13,6 +13,7 @@ import {
   rateWriteSchema,
   remainingWriteSchema,
   reviewWriteSchema,
+  roomOptionWriteSchema,
   roomWriteSchema,
   statusUpdateSchema,
 } from '../schemas.js';
@@ -24,6 +25,7 @@ import {
   paymentFromRow,
   reservationFromRow,
   reviewFromRow,
+  roomOptionFromRow,
   roomFromRow,
 } from '../transformers.js';
 import { getBookedCount } from '../services/availability.js';
@@ -98,6 +100,17 @@ adminRouter.get('/dashboard', asyncHandler(async (_req, res) => {
 
 adminRouter.get('/content', asyncHandler(async (_req, res) => {
   res.json(await getWebsiteContent(pool, { admin: true }));
+}));
+
+adminRouter.get('/content/room-options', asyncHandler(async (_req, res) => {
+  const [amenities, policies] = await Promise.all([
+    pool.query(`select * from room_amenity_options where is_active = true order by sort_order, label`),
+    pool.query(`select * from room_policy_options where is_active = true order by sort_order, label`),
+  ]);
+  res.json({
+    amenities: amenities.rows.map(roomOptionFromRow),
+    policies: policies.rows.map(roomOptionFromRow),
+  });
 }));
 
 adminRouter.put('/content/hero', asyncHandler(async (req, res) => {
@@ -207,6 +220,60 @@ adminRouter.delete('/content/attractions/:id', asyncHandler(async (req, res) => 
   const result = await pool.query(`delete from website_attractions where id = $1 returning *`, [id]);
   if (!result.rowCount) throw notFound('attraction_not_found', 'Attraction was not found.');
   await audit(pool, { actorId: req.user!.id, entity: 'website_attraction', entityId: id, action: 'delete', before: attractionFromRow(result.rows[0]) });
+  res.json({ ok: true });
+}));
+
+adminRouter.post('/content/amenities', asyncHandler(async (req, res) => {
+  const input = roomOptionWriteSchema.parse(req.body);
+  const result = await pool.query(
+    `insert into room_amenity_options(label, sort_order, updated_by)
+     values ($1, $2, $3)
+     on conflict (lower(label))
+     do update set is_active = true, sort_order = excluded.sort_order, updated_by = excluded.updated_by, updated_at = now()
+     returning *`,
+    [input.label, input.sortOrder, req.user!.id],
+  );
+  await audit(pool, { actorId: req.user!.id, entity: 'room_amenity_option', entityId: result.rows[0].id, action: 'create', after: input });
+  res.status(201).json(roomOptionFromRow(result.rows[0]));
+}));
+
+adminRouter.delete('/content/amenities/:id', asyncHandler(async (req, res) => {
+  const id = z.string().uuid().parse(req.params.id);
+  const result = await pool.query(
+    `update room_amenity_options set is_active = false, updated_by = $2, updated_at = now()
+     where id = $1 and is_active = true
+     returning *`,
+    [id, req.user!.id],
+  );
+  if (!result.rowCount) throw notFound('room_amenity_option_not_found', 'Amenity option was not found.');
+  await audit(pool, { actorId: req.user!.id, entity: 'room_amenity_option', entityId: id, action: 'delete', before: roomOptionFromRow(result.rows[0]) });
+  res.json({ ok: true });
+}));
+
+adminRouter.post('/content/policies', asyncHandler(async (req, res) => {
+  const input = roomOptionWriteSchema.parse(req.body);
+  const result = await pool.query(
+    `insert into room_policy_options(label, sort_order, updated_by)
+     values ($1, $2, $3)
+     on conflict (lower(label))
+     do update set is_active = true, sort_order = excluded.sort_order, updated_by = excluded.updated_by, updated_at = now()
+     returning *`,
+    [input.label, input.sortOrder, req.user!.id],
+  );
+  await audit(pool, { actorId: req.user!.id, entity: 'room_policy_option', entityId: result.rows[0].id, action: 'create', after: input });
+  res.status(201).json(roomOptionFromRow(result.rows[0]));
+}));
+
+adminRouter.delete('/content/policies/:id', asyncHandler(async (req, res) => {
+  const id = z.string().uuid().parse(req.params.id);
+  const result = await pool.query(
+    `update room_policy_options set is_active = false, updated_by = $2, updated_at = now()
+     where id = $1 and is_active = true
+     returning *`,
+    [id, req.user!.id],
+  );
+  if (!result.rowCount) throw notFound('room_policy_option_not_found', 'Policy option was not found.');
+  await audit(pool, { actorId: req.user!.id, entity: 'room_policy_option', entityId: id, action: 'delete', before: roomOptionFromRow(result.rows[0]) });
   res.json({ ok: true });
 }));
 

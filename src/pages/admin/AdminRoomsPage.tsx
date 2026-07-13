@@ -8,12 +8,13 @@ import { useToast } from '@/hooks/use-toast';
 import { Plus, Trash2, Loader2 } from 'lucide-react';
 import { RoomTypeFormDialog, type RoomFormValues, type RoomTypeFormInitial } from '@/components/admin/RoomTypeFormDialog';
 import roomFallback from '@/assets/room-king.jpg';
-import type { RoomType } from '@/types';
+import type { RoomOptionsCatalog, RoomType } from '@/types';
 import {
   createAdminRoomType,
   deleteAdminRoomType,
   getRoomTypes,
   getAdminRoomTypes,
+  getRoomOptionsCatalog,
   updateAdminRoomType,
   type RoomTypeWritePayload,
 } from '@/services/api';
@@ -30,6 +31,9 @@ const roomToInitial = (room: RoomType): RoomTypeFormInitial => ({
   baseInventory: room.inventoryCount,
   isActive: room.isActive,
   images: room.images,
+  amenities: room.amenities,
+  policies: room.policies,
+  cancellationTerms: room.cancellationTerms,
   sortOrder: room.sortOrder,
 });
 
@@ -44,9 +48,9 @@ const valuesToPayload = (values: RoomFormValues, existing?: RoomType): RoomTypeW
   baseInventory: values.baseInventory,
   isActive: values.isActive,
   images: values.images,
-  amenities: existing?.amenities,
-  policies: existing?.policies,
-  cancellationTerms: existing?.cancellationTerms,
+  amenities: values.amenities,
+  policies: values.policies,
+  cancellationTerms: values.cancellationTerms,
   sortOrder: existing?.sortOrder ?? 0,
 });
 
@@ -55,6 +59,7 @@ export default function AdminRoomsPage() {
   const [rooms, setRooms] = useState<RoomType[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [roomOptions, setRoomOptions] = useState<RoomOptionsCatalog>({ amenities: [], policies: [] });
   const [savingId, setSavingId] = useState<string | null>(null);
   const [dialog, setDialog] = useState<{ mode: 'add' | 'edit'; id?: string } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
@@ -72,7 +77,12 @@ export default function AdminRoomsPage() {
     setLoading(true);
     setError(null);
     try {
-      setRooms(await getAdminRoomTypes());
+      const [roomData, optionData] = await Promise.all([
+        getAdminRoomTypes(),
+        getRoomOptionsCatalog(),
+      ]);
+      setRooms(roomData);
+      setRoomOptions(optionData);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to load room types.');
     } finally {
@@ -300,6 +310,7 @@ export default function AdminRoomsPage() {
         open={!!dialog}
         mode={dialog?.mode ?? 'add'}
         initial={editing ? roomToInitial(editing) : undefined}
+        options={roomOptions}
         onClose={() => setDialog(null)}
         onSubmit={handleSubmit}
       />

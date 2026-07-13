@@ -141,6 +141,11 @@ export const galleryWriteSchema = z.object({
   sortOrder: z.coerce.number().int().min(0).max(9999).default(0),
 });
 
+export const roomOptionWriteSchema = z.object({
+  label: z.string().trim().min(1).max(160),
+  sortOrder: z.coerce.number().int().min(0).max(9999).default(0),
+});
+
 export const reviewWriteSchema = z.object({
   guestName: z.string().trim().min(1).max(120),
   rating: z.coerce.number().int().min(1).max(5),

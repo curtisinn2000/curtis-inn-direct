@@ -67,6 +67,7 @@ export default function RoomDetailPage() {
   const amenities = room.amenities.length ? room.amenities : DEFAULT_AMENITIES;
   const policies = room.policies.length ? room.policies : DEFAULT_POLICIES;
   const cancellationTerms = room.cancellationTerms || DEFAULT_CANCELLATION;
+  const visiblePolicies = policies.filter(policy => policy.trim().toLowerCase() !== cancellationTerms.trim().toLowerCase());
   const soldOut = room.inventoryCount === 0;
   const images = room.images.length ? room.images : [roomImg];
 
@@ -131,10 +132,10 @@ export default function RoomDetailPage() {
             <div>
               <h3 className="font-semibold mb-3">Policies</h3>
               <ul className="space-y-1.5">
-                {policies.map(policy => (
+                {visiblePolicies.map(policy => (
                   <li key={policy} className="text-sm text-muted-foreground">{policy}</li>
                 ))}
-                <li className="text-sm text-muted-foreground">{cancellationTerms}</li>
+                {cancellationTerms && <li className="text-sm text-muted-foreground">{cancellationTerms}</li>}
               </ul>
             </div>
           </div>
