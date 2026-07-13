@@ -21,6 +21,11 @@ const envSchema = z.object({
   GMAIL_SMTP_USER: z.string().optional().default(''),
   GMAIL_SMTP_PASS: z.string().optional().default(''),
   MAIL_FROM: z.string().optional().default('curtisinn200@gmail.com'),
+  HOTEL_NOTIFICATIONS_EMAIL: z.string().email().optional().default('curtisinn200@gmail.com'),
+  TWILIO_ACCOUNT_SID: z.string().optional().default(''),
+  TWILIO_AUTH_TOKEN: z.string().optional().default(''),
+  TWILIO_MESSAGING_SERVICE_SID: z.string().optional().default(''),
+  TWILIO_FROM_NUMBER: z.string().optional().default(''),
   GCS_CONTENT_BUCKET: z.string().optional().default(''),
 });
 
@@ -36,4 +41,15 @@ const isRealSecret = (value: string) => Boolean(value && value !== 'not-configur
 export const stripeConfigured = Boolean(
   isRealSecret(config.STRIPE_SECRET_KEY) &&
   isRealSecret(config.STRIPE_WEBHOOK_SECRET),
+);
+
+export const mailConfigured = Boolean(
+  isRealSecret(config.GMAIL_SMTP_USER) &&
+  isRealSecret(config.GMAIL_SMTP_PASS),
+);
+
+export const twilioConfigured = Boolean(
+  isRealSecret(config.TWILIO_ACCOUNT_SID) &&
+  isRealSecret(config.TWILIO_AUTH_TOKEN) &&
+  (isRealSecret(config.TWILIO_MESSAGING_SERVICE_SID) || isRealSecret(config.TWILIO_FROM_NUMBER)),
 );

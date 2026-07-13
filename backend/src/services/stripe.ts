@@ -92,6 +92,8 @@ export async function createStripeCheckoutSession(db: DbClient, reservationId: s
       guestName,
     },
     payment_intent_data: {
+      receipt_email: row.guest_email,
+      description: `Curtis Inn reservation ${row.confirmation_number}`,
       metadata: {
         reservationId: row.reservation_id,
         paymentId: row.payment_id,
@@ -136,7 +138,7 @@ export async function fulfillStripeCheckoutSession(db: DbClient, session: Stripe
      where id = $4
        and reservation_id = $5
        and provider = 'stripe'
-     returning status`,
+     returning id, reservation_id, status`,
     [paymentStatus, session.id, paymentIntentId, paymentId, reservationId],
   );
 
@@ -170,6 +172,47 @@ export async function fulfillStripeCheckoutSession(db: DbClient, session: Stripe
       reservationStatus,
     },
   });
+
+  return {
+    reservationId,
+    paymentId,
+    paymentStatus,
+  };
+}
+
+export async function storeStripeReceiptDetails(db: DbClient, session: Stripe.Checkout.Session) {
+  const reservationId = session.metadata?.reservationId ?? session.client_reference_id;
+  const paymentId = session.metadata?.paymentId;
+  const paymentIntentId = typeof session.payment_intent === 'string'
+    ? session.payment_intent
+    : session.payment_intent?.id ?? null;
+
+  if (!reservationId || !paymentId || !paymentIntentId) {
+    return { receiptUrl: null };
+  }
+
+  const stripe = getStripeClient();
+  const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId, {
+    expand: ['latest_charge'],
+  });
+  const latestCharge = paymentIntent.latest_charge;
+  const charge = typeof latestCharge === 'string' ? null : latestCharge;
+  const chargeId = typeof latestCharge === 'string' ? latestCharge : charge?.id ?? null;
+  const receiptUrl = charge?.receipt_url ?? null;
+
+  await db.query(
+    `update payments
+     set stripe_payment_intent_id = $1,
+         stripe_charge_id = coalesce($2, stripe_charge_id),
+         stripe_receipt_url = coalesce($3, stripe_receipt_url),
+         updated_at = now()
+     where id = $4
+       and reservation_id = $5
+       and provider = 'stripe'`,
+    [paymentIntentId, chargeId, receiptUrl, paymentId, reservationId],
+  );
+
+  return { receiptUrl };
 }
 
 export async function markStripeSessionFailed(db: DbClient, session: Stripe.Checkout.Session, action: string) {

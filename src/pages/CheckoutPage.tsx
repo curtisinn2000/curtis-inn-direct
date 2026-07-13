@@ -157,6 +157,7 @@ export default function CheckoutPage() {
                   <div>
                     <Label htmlFor="phone">Phone *</Label>
                     <Input id="phone" type="tel" value={guest.phone} onChange={e => setGuest(g => ({ ...g, phone: e.target.value }))} required />
+                    <p className="mt-1 text-xs text-muted-foreground">We will text this number after payment with your reservation confirmation.</p>
                   </div>
                 </div>
                 <div>

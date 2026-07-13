@@ -9,7 +9,9 @@ import {
   fulfillStripeCheckoutSession,
   getStripeClient,
   markStripeSessionFailed,
+  storeStripeReceiptDetails,
 } from '../services/stripe.js';
+import { sendReservationConfirmationNotifications } from '../services/notifications.js';
 import { config, stripeConfigured } from '../config.js';
 
 export const stripeRouter = Router();
@@ -48,9 +50,23 @@ stripeWebhookRouter.post('/', asyncHandler(async (req, res) => {
   switch (event.type) {
     case 'checkout.session.completed': {
       const session = event.data.object as Stripe.Checkout.Session;
-      await withTransaction(async client => {
-        await fulfillStripeCheckoutSession(client, session);
+      const fulfillment = await withTransaction(async client => {
+        return fulfillStripeCheckoutSession(client, session);
       });
+      if (fulfillment.paymentStatus === 'paid') {
+        let receiptUrl: string | null = null;
+        try {
+          const details = await storeStripeReceiptDetails(pool, session);
+          receiptUrl = details.receiptUrl;
+        } catch (error) {
+          console.warn('Stripe receipt lookup failed after successful payment confirmation.', error);
+        }
+        try {
+          await sendReservationConfirmationNotifications(pool, fulfillment.reservationId, receiptUrl);
+        } catch (error) {
+          console.warn('Reservation confirmation notifications failed after successful payment confirmation.', error);
+        }
+      }
       break;
     }
     case 'checkout.session.expired':
