@@ -101,6 +101,6 @@ export const MOCK_AUDIT_LOGS: AuditLog[] = [
 ];
 
 export const MOCK_EMAIL_LOGS: EmailLog[] = [
-  { id: 'email-001', recipientEmail: 'curtisinn200@gmail.com', templateType: 'booking_confirmed', subject: 'Booking Confirmed - CIS-20260712-0000001', status: 'sent', reservationId: 'res-001', createdAt: '2024-12-10T14:33:00Z' },
-  { id: 'email-002', recipientEmail: 'curtisinn200@gmail.com', templateType: 'booking_confirmed', subject: 'Booking Confirmed - CIS-20260712-0000002', status: 'sent', reservationId: 'res-002', createdAt: '2024-12-12T09:22:00Z' },
+  { id: 'email-001', recipientEmail: 'curtisinn200@gmail.com', templateType: 'booking_confirmed', subject: 'Booking Confirmed: CIS-20260712-0000001', status: 'sent', reservationId: 'res-001', createdAt: '2024-12-10T14:33:00Z' },
+  { id: 'email-002', recipientEmail: 'curtisinn200@gmail.com', templateType: 'booking_confirmed', subject: 'Booking Confirmed: CIS-20260712-0000002', status: 'sent', reservationId: 'res-002', createdAt: '2024-12-12T09:22:00Z' },
 ];

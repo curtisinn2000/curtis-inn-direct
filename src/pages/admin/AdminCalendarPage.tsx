@@ -101,7 +101,7 @@ export default function AdminCalendarPage() {
               <ChevronLeft className="h-4 w-4" />
             </Button>
             <div className="text-sm font-medium min-w-[220px] text-center">
-              {dates.length ? `${format(dates[0], 'd MMM yyyy')} - ${format(dates[dates.length - 1], 'd MMM yyyy')}` : 'Loading...'}
+              {dates.length ? `${format(dates[0], 'd MMM yyyy')} to ${format(dates[dates.length - 1], 'd MMM yyyy')}` : 'Loading...'}
             </div>
             <Button variant="ghost" size="icon" onClick={() => setStartDate(d => addDays(d, DAY_WINDOW))} aria-label="Next range">
               <ChevronRight className="h-4 w-4" />
@@ -421,7 +421,7 @@ function RemainingCell({ room, day, disabled, onSaved }: {
         'p-2 text-center border-l text-xs font-medium w-full transition-colors',
         locked ? 'text-muted-foreground/50 cursor-not-allowed' : 'hover:bg-muted/50 cursor-text',
       )}
-      title={day.status === 'closed' ? 'Closed - reopen via Bulk Update' : disabled ? 'Past date' : `Click to edit (max ${max})`}
+      title={day.status === 'closed' ? 'Closed. Reopen via Bulk Update' : disabled ? 'Past date' : `Click to edit (max ${max})`}
     >
       {day.status === 'closed' ? '-' : saving ? '...' : day.remaining}
     </button>

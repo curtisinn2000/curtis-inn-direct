@@ -38,7 +38,7 @@ export default function AdminReportsPage() {
             <ReportCard title="Avg. Lead Time" value="5.2 days" change="-1.1 days" />
           </div>
           <Card className="p-8 text-center text-muted-foreground">
-            <p>Chart placeholder — bookings over time</p>
+            <p>Chart placeholder for bookings over time</p>
             <p className="text-xs mt-1">Connect backend for real data visualization</p>
           </Card>
         </TabsContent>
@@ -51,7 +51,7 @@ export default function AdminReportsPage() {
             <ReportCard title="ADR" value="$106.25" change="+$2.80" />
           </div>
           <Card className="p-8 text-center text-muted-foreground">
-            <p>Chart placeholder — occupancy trends</p>
+            <p>Chart placeholder for occupancy trends</p>
           </Card>
         </TabsContent>
 
@@ -63,7 +63,7 @@ export default function AdminReportsPage() {
             <ReportCard title="Outstanding" value="$2,340" change="4 unpaid" />
           </div>
           <Card className="p-8 text-center text-muted-foreground">
-            <p>Chart placeholder — revenue trends</p>
+            <p>Chart placeholder for revenue trends</p>
           </Card>
         </TabsContent>
 
@@ -75,7 +75,7 @@ export default function AdminReportsPage() {
             <ReportCard title="Revenue Lost" value="$1,245" change="-$520" />
           </div>
           <Card className="p-8 text-center text-muted-foreground">
-            <p>Chart placeholder — cancellation trends</p>
+            <p>Chart placeholder for cancellation trends</p>
           </Card>
         </TabsContent>
       </Tabs>

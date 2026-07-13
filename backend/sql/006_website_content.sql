@@ -65,8 +65,8 @@ create index if not exists website_attractions_public_sort_idx on website_attrac
 insert into website_content_settings(key, value)
 values
   ('heroTitle', 'Curtis Inn & Suites'),
-  ('heroSubtitle', 'Your Hollywood, Florida Getaway'),
-  ('heroDescription', 'Affordable comfort steps from Hollywood Beach. Free parking, pool, and Wi-Fi - book direct for the best rates.')
+  ('heroSubtitle', 'Hollywood, Florida'),
+  ('heroDescription', 'Affordable comfort steps from Hollywood Beach. Free parking, pool, and Wi-Fi. Book direct for the best rates.')
 on conflict (key) do nothing;
 
 insert into website_faqs(question, answer, category, sort_order)

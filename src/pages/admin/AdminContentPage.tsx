@@ -42,7 +42,7 @@ import { GripVertical, ImageIcon, Loader2, Plus, Star, Trash2, Upload } from 'lu
 const emptyContent: WebsiteContent = {
   hero: {
     heroTitle: 'Curtis Inn & Suites',
-    heroSubtitle: 'Your Hollywood, Florida Getaway',
+    heroSubtitle: 'Hollywood, Florida',
     heroDescription: 'Affordable comfort steps from Hollywood Beach.',
   },
   faqs: [],
@@ -122,7 +122,7 @@ export default function AdminContentPage() {
   async function saveHero() {
     setSaving(true);
     try {
-      const saved = await updateHeroContent({ ...hero, heroTitle: PROPERTY.brandTitle });
+      const saved = await updateHeroContent({ ...hero, heroTitle: PROPERTY.name, heroSubtitle: PROPERTY.location });
       setContent(current => ({ ...current, hero: saved }));
       setHero(saved);
       toast({ title: 'Hero content saved', description: 'The homepage hero copy is now live.' });
@@ -412,11 +412,11 @@ export default function AdminContentPage() {
           <Card className="p-6 space-y-4">
             <div>
               <Label htmlFor="hero-title">Brand Heading</Label>
-              <Input id="hero-title" value={PROPERTY.brandTitle} readOnly className="bg-muted" />
+              <Input id="hero-title" value={PROPERTY.name} readOnly className="bg-muted" />
             </div>
             <div>
-              <Label htmlFor="hero-subtitle">Hero Subtitle</Label>
-              <Input id="hero-subtitle" value={hero.heroSubtitle} onChange={event => setHero({ ...hero, heroSubtitle: event.target.value })} />
+              <Label htmlFor="hero-subtitle">Hero Location</Label>
+              <Input id="hero-subtitle" value={PROPERTY.location} readOnly className="bg-muted" />
             </div>
             <div>
               <Label htmlFor="hero-description">Hero Description</Label>
@@ -506,7 +506,7 @@ export default function AdminContentPage() {
                   )}
                   <div className="min-w-0">
                     <p className="font-medium text-sm">{attraction.name}</p>
-                    <p className="text-xs text-muted-foreground">{attraction.distance} - {attraction.description}</p>
+                    <p className="text-xs text-muted-foreground">{attraction.distance}. {attraction.description}</p>
                   </div>
                 </div>
                 <Button variant="ghost" size="icon" onClick={() => removeItem('attraction', attraction.id, attraction.name)} disabled={saving}>

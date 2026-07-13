@@ -215,7 +215,7 @@ export function BulkUpdateDialog({ open, onOpenChange, rooms, onSubmit }: Props)
                   <Pencil className="h-3 w-3" /> Edit
                 </button>
               </div>
-              <p className="text-sm mt-1">{format(range!.from!, 'MMM dd, yyyy')} – {format(range!.to!, 'MMM dd, yyyy')}</p>
+              <p className="text-sm mt-1">{format(range!.from!, 'MMM dd, yyyy')} to {format(range!.to!, 'MMM dd, yyyy')}</p>
               <p className="text-xs text-muted-foreground">{daysCount} days will be updated</p>
             </Card>
 
@@ -283,7 +283,7 @@ export function BulkUpdateDialog({ open, onOpenChange, rooms, onSubmit }: Props)
                   <Pencil className="h-3 w-3" /> Edit
                 </button>
               </div>
-              <p className="text-sm mt-1">{format(range!.from!, 'MMM dd, yyyy')} – {format(range!.to!, 'MMM dd, yyyy')}</p>
+              <p className="text-sm mt-1">{format(range!.from!, 'MMM dd, yyyy')} to {format(range!.to!, 'MMM dd, yyyy')}</p>
               <p className="text-xs text-muted-foreground">{daysCount} days will be updated</p>
             </Card>
 

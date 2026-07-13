@@ -115,7 +115,7 @@ export default function RoomDetailPage() {
             </div>
 
             <Button asChild size="lg" disabled={soldOut} className="w-full bg-accent text-accent-foreground hover:bg-accent/90 mb-6">
-              <Link to={`/booking?roomSlug=${room.slug}`}>{soldOut ? 'Sold out - Check other dates' : 'Book This Room'}</Link>
+              <Link to={`/booking?roomSlug=${room.slug}`}>{soldOut ? 'Sold out. Check other dates' : 'Book This Room'}</Link>
             </Button>
 
             <div className="mb-6">

@@ -45,8 +45,8 @@ export function BookingWidget() {
 
   const dateLabel = range?.from
     ? range.to
-      ? `${format(range.from, 'MMM d')} — ${format(range.to, 'MMM d, yyyy')}`
-      : `${format(range.from, 'MMM d, yyyy')} — Select check-out`
+      ? `${format(range.from, 'MMM d')} to ${format(range.to, 'MMM d, yyyy')}`
+      : `${format(range.from, 'MMM d, yyyy')} to select check-out`
     : 'Select your dates';
 
   return (
@@ -54,7 +54,7 @@ export function BookingWidget() {
       <div className="grid grid-cols-1 items-end gap-3 md:grid-cols-2 lg:grid-cols-[minmax(320px,1fr)_140px_125px_180px] lg:gap-4">
         <div className="md:col-span-2 lg:col-span-1">
           <Label className="mb-2 flex items-center gap-2 text-xs font-semibold text-foreground">
-            <CalendarIcon className="h-4 w-4 text-accent" /> Check-in — Check-out
+            <CalendarIcon className="h-4 w-4 text-accent" /> Check-in and check-out
           </Label>
           <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>

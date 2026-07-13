@@ -9,7 +9,8 @@ export function PublicFooter() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-10">
           {/* Brand */}
           <div className="md:col-span-1">
-            <h3 className="mb-3 text-lg font-bold leading-snug">{PROPERTY.brandTitle}</h3>
+            <h3 className="text-lg font-bold leading-snug">{PROPERTY.name}</h3>
+            <p className="mb-3 mt-1 whitespace-nowrap text-xs font-medium opacity-80">{PROPERTY.tagline}</p>
             <p className="text-sm opacity-80 leading-relaxed">
               Affordable comfort in Hollywood, Florida. Steps from the beach, close to everything.
             </p>
@@ -56,9 +57,8 @@ export function PublicFooter() {
           </div>
         </div>
 
-        <div className="mt-12 pt-8 border-t border-primary-foreground/10 flex flex-col md:flex-row justify-between items-center gap-4 text-xs opacity-50">
+        <div className="mt-12 flex items-center justify-center border-t border-primary-foreground/10 pt-8 text-xs opacity-50">
           <p>© {new Date().getFullYear()} {PROPERTY.name}. All rights reserved.</p>
-          <p>Book direct for the best rates</p>
         </div>
       </div>
     </footer>

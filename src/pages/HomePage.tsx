@@ -102,14 +102,14 @@ export default function HomePage() {
         <div className="absolute inset-0 bg-gradient-to-t from-foreground via-foreground/40 to-foreground/5" />
         <div className="absolute inset-0 bg-gradient-to-r from-foreground/40 via-foreground/15 to-transparent" />
         <div className="relative container-wide pb-24 pt-40 z-10">
-          <div className="max-w-2xl">
-            <p className="text-overline text-primary-foreground/80 mb-3 [text-shadow:0_1px_2px_rgb(0_0_0_/_0.5)]">{hero?.heroSubtitle || 'Hollywood, Florida'}</p>
-            <h1 className="text-display text-primary-foreground mb-4 [text-shadow:0_2px_24px_rgb(0_0_0_/_0.55)]">{PROPERTY.brandTitle}</h1>
+          <div className="max-w-3xl">
+            <p className="mb-3 text-overline text-primary-foreground/80 [text-shadow:0_1px_2px_rgb(0_0_0_/_0.5)]">{PROPERTY.location}</p>
+            <div className="mb-5 inline-flex max-w-full flex-col items-start text-primary-foreground [text-shadow:0_2px_24px_rgb(0_0_0_/_0.55)]">
+              <h1 className="whitespace-nowrap text-3xl font-bold leading-none sm:text-5xl lg:text-6xl">{PROPERTY.name}</h1>
+              <p className="mt-2 whitespace-nowrap text-[13px] font-semibold leading-none sm:text-lg lg:text-xl">{PROPERTY.tagline}</p>
+            </div>
             <p className="text-body-lg text-primary-foreground/95 mb-8 [text-shadow:0_1px_8px_rgb(0_0_0_/_0.6)]">
-              {hero?.heroDescription || 'Affordable comfort steps from Hollywood Beach. Free parking, pool, and Wi-Fi - book direct for the best rates.'}
-            </p>
-            <p className="hidden">
-              Affordable comfort steps from Hollywood Beach. Free parking, pool, and Wi-Fi — book direct for the best rates.
+              {hero?.heroDescription || 'Affordable comfort steps from Hollywood Beach. Free parking, pool, and Wi-Fi. Book direct for the best rates.'}
             </p>
             <div className="flex gap-3">
               <Button size="lg" asChild className="bg-accent text-accent-foreground hover:bg-accent/90 shadow-lg">
@@ -140,7 +140,7 @@ export default function HomePage() {
               <h2 className="text-headline mb-6">Simple, honest, comfortable.</h2>
               <p className="text-body text-muted-foreground mb-6">
                 Curtis Inn & Suites offers a straightforward, affordable stay in the heart of Hollywood, Florida.
-                No gimmicks — just clean rooms, friendly service, and a prime location near the beach, shopping, and entertainment.
+                No gimmicks, just clean rooms, friendly service, and a prime location near the beach, shopping, and entertainment.
               </p>
               <div className="grid grid-cols-2 gap-4">
                 {[

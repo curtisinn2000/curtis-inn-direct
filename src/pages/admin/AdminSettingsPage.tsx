@@ -47,7 +47,7 @@ export default function AdminSettingsPage() {
             <div><Label>Sender Email</Label><Input defaultValue={PROPERTY.email} /></div>
             <div><Label>Reply-To Email</Label><Input defaultValue={PROPERTY.email} /></div>
             <div><Label>SMTP / Gmail API</Label><Input placeholder="Configure in backend" disabled /></div>
-            <Badge variant="secondary">Placeholder — connect backend email service</Badge>
+            <Badge variant="secondary">Placeholder. Connect backend email service.</Badge>
             <Button>Save Settings</Button>
           </Card>
         </TabsContent>

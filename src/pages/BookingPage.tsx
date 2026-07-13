@@ -50,8 +50,8 @@ export default function BookingPage() {
   const requestedRooms = Math.max(1, Number(search.rooms) || 1);
   const dateLabel = range?.from
     ? range.to
-      ? `${format(range.from, 'MMM d')} - ${format(range.to, 'MMM d, yyyy')}`
-      : `${format(range.from, 'MMM d, yyyy')} - Select check-out`
+      ? `${format(range.from, 'MMM d')} to ${format(range.to, 'MMM d, yyyy')}`
+      : `${format(range.from, 'MMM d, yyyy')} to select check-out`
     : 'Select your dates';
 
   const selectedRooms = cart.reduce((sum, line) => sum + line.rooms, 0);
@@ -159,7 +159,7 @@ export default function BookingPage() {
           <div className="grid grid-cols-1 md:grid-cols-[1fr_180px_180px_220px] gap-4 items-end">
             <div>
               <Label className="text-xs text-muted-foreground mb-1.5 flex items-center gap-1">
-                <Calendar className="h-3 w-3" /> Check-in - Check-out
+                <Calendar className="h-3 w-3" /> Check-in and check-out
               </Label>
               <Popover open={dateOpen} onOpenChange={setDateOpen}>
                 <PopoverTrigger asChild>

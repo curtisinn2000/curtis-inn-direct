@@ -155,7 +155,7 @@ export function BulkPriceUpdatePanel({ rooms }: Props) {
         <div className="space-y-4">
           <SummaryCard
             title="Date Range"
-            detail={`${format(range!.from!, 'MMM dd, yyyy')} - ${format(range!.to!, 'MMM dd, yyyy')}`}
+            detail={`${format(range!.from!, 'MMM dd, yyyy')} to ${format(range!.to!, 'MMM dd, yyyy')}`}
             subdetail={`${daysCount} days will be updated`}
             onEdit={() => setStep('dates')}
           />
@@ -204,7 +204,7 @@ export function BulkPriceUpdatePanel({ rooms }: Props) {
         <div className="space-y-4">
           <SummaryCard
             title="Date Range"
-            detail={`${format(range!.from!, 'MMM dd, yyyy')} - ${format(range!.to!, 'MMM dd, yyyy')}`}
+            detail={`${format(range!.from!, 'MMM dd, yyyy')} to ${format(range!.to!, 'MMM dd, yyyy')}`}
             subdetail={`${daysCount} days will be updated`}
             onEdit={() => setStep('dates')}
           />

@@ -27,12 +27,12 @@ export function PublicHeader() {
             <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{PROPERTY.address}</span>
             <span className="flex items-center gap-1"><Phone className="h-3 w-3" />{PROPERTY.phone}</span>
           </div>
-          <span>Direct bookings — best rates guaranteed</span>
+          <span>Direct bookings with best rates guaranteed</span>
         </div>
 
         {/* Main nav */}
         <div className="flex items-center justify-between h-16">
-          <Link to="/" className="flex min-w-0 flex-col leading-none" aria-label={PROPERTY.brandTitle}>
+          <Link to="/" className="flex min-w-0 flex-col leading-none" aria-label={PROPERTY.brandLabel}>
             <span className="truncate text-lg font-bold text-foreground sm:text-xl">{PROPERTY.name}</span>
             <span className="mt-1 hidden text-[10px] font-medium text-muted-foreground sm:block">
               {PROPERTY.tagline}

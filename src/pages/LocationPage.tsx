@@ -38,7 +38,7 @@ export default function LocationPage() {
           <p className="text-overline mb-2">Location</p>
           <h1 className="text-headline mb-4">Find Us</h1>
           <p className="text-body text-muted-foreground max-w-2xl">
-            Ideally located on Federal Highway in Hollywood, Florida — minutes from the beach, shopping, and entertainment.
+            Ideally located on Federal Highway in Hollywood, Florida, minutes from the beach, shopping, and entertainment.
           </p>
         </div>
 
@@ -52,7 +52,7 @@ export default function LocationPage() {
               </div>
             </div>
             <div className="aspect-video bg-muted rounded-lg flex items-center justify-center">
-              <p className="text-muted-foreground text-sm">Map embed placeholder — replace with Google Maps iframe</p>
+              <p className="text-muted-foreground text-sm">Map embed placeholder. Replace with a Google Maps iframe.</p>
             </div>
           </Card>
           <div className="aspect-[4/3] lg:aspect-auto rounded-xl overflow-hidden">

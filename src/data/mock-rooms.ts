@@ -56,7 +56,7 @@ export const MOCK_ROOMS: RoomType[] = [
   ),
   createRoom(
     'one-bedroom-suite', 'One-Bedroom Suite',
-    'Separate bedroom and living room with kitchenette — ideal for families or longer stays.',
+    'Separate bedroom and living room with kitchenette, ideal for families or longer stays.',
     'The One-Bedroom Suite features a private bedroom with a comfortable bed, a separate living room with sofa, and a kitchenette equipped with essentials. This suite provides the perfect balance of space and comfort for families or extended-stay guests.',
     4, 'King + Sofa Bed', 169, 2, 5,
   ),
@@ -68,12 +68,12 @@ export const MOCK_ROOMS: RoomType[] = [
   ),
   createRoom(
     'superior-two-double', 'Superior Room with Two Double Beds',
-    'Generous room with two double beds — great for families or friends sharing.',
+    'Generous room with two double beds, great for families or friends sharing.',
     'The Superior Room with Two Double Beds provides ample space and sleeping capacity for up to four guests. Featuring two comfortable double beds, modern amenities, and a clean, well-appointed bathroom, this room is perfect for families or friends traveling together.',
     4, '2 Double Beds', 99, 5, 7,
   ),
   createRoom(
-    'superior-two-double-ada', 'Superior Room with Two Double Beds - Disability Access',
+    'superior-two-double-ada', 'Superior Room with Two Double Beds, Disability Access',
     'Accessible room with two double beds, ADA-compliant features, and barrier-free design.',
     'Our ADA-accessible Superior Room features two double beds, a roll-in shower, grab bars, lowered fixtures, and wider doorways. All the comfort and amenities of our superior rooms with thoughtful accessibility features throughout.',
     4, '2 Double Beds', 99, 2, 8,

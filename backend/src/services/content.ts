@@ -6,7 +6,7 @@ async function getHero(db: DbClient) {
   const settings = Object.fromEntries(result.rows.map(row => [String(row.key), String(row.value ?? '')]));
   return {
     heroTitle: settings.heroTitle || 'Curtis Inn & Suites',
-    heroSubtitle: settings.heroSubtitle || 'Your Hollywood, Florida Getaway',
+    heroSubtitle: settings.heroSubtitle || 'Hollywood, Florida',
     heroDescription: settings.heroDescription || 'Affordable comfort steps from Hollywood Beach.',
   };
 }
