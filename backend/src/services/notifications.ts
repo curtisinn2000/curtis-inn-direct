@@ -69,6 +69,34 @@ export async function sendReservationConfirmationNotifications(db: DbClient, res
   });
 }
 
+export async function resendReservationConfirmationNotifications(
+  db: DbClient,
+  confirmationNumber: string,
+  templates: string[] = ['guest_booking_confirmed', 'guest_booking_confirmed_sms'],
+) {
+  const result = await db.query(
+    `select id
+     from reservations
+     where lower(confirmation_number) = lower($1)
+       and status = 'confirmed'
+       and payment_status = 'paid'`,
+    [confirmationNumber],
+  );
+  if (!result.rowCount) {
+    throw new Error(`Confirmed and paid reservation was not found for ${confirmationNumber}.`);
+  }
+
+  const reservationId = String(result.rows[0].id);
+  await db.query(
+    `delete from notification_deliveries
+     where reservation_id = $1
+       and template_type = any($2::text[])
+       and status <> 'sent'`,
+    [reservationId, templates],
+  );
+  await sendReservationConfirmationNotifications(db, reservationId);
+}
+
 async function loadReservationNotification(db: DbClient, reservationId: string, receiptUrl?: string | null): Promise<ReservationNotification | null> {
   const result = await db.query(
     `select
@@ -296,14 +324,15 @@ async function claimDelivery(
 async function finishDelivery(db: DbClient, id: string, status: NotificationStatus, providerMessageId?: string, errorText?: string) {
   await db.query(
     `update notification_deliveries
-     set status = $2,
+     set status = $2::notification_status,
          provider_message_id = coalesce($3, provider_message_id),
          error_text = $4,
-         sent_at = case when $2 = 'sent' then now() else sent_at end,
+         sent_at = case when $2::notification_status = 'sent' then now() else sent_at end,
          updated_at = now()
      where id = $1`,
     [id, status, providerMessageId ?? null, errorText ?? null],
   );
+  console.log(`notification_delivery ${id} ${status}${providerMessageId ? ` provider=${providerMessageId}` : ''}${errorText ? ` error=${errorText}` : ''}`);
 }
 
 function getMailTransport() {
