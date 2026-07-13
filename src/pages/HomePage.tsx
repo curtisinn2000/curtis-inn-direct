@@ -5,7 +5,7 @@ import { Card } from '@/components/ui/card';
 import { PROPERTY, AMENITIES_LIST } from '@/config/constants';
 import { BookingWidget } from '@/components/booking/BookingWidget';
 import { RatingBadgesRow } from '@/components/RatingBadgesRow';
-import { AutoRotatingGallery } from '@/components/AutoRotatingGallery';
+import { RotatingGalleryMosaic } from '@/components/RotatingGalleryMosaic';
 import { ScrollingPhotoRail } from '@/components/ScrollingPhotoRail';
 import { Star, ArrowRight, Waves, Wifi, Car, Wind, WashingMachine, Flame, MapPin, Users, ChevronRight, Loader2 } from 'lucide-react';
 import heroImg from '@/assets/hero-hotel.jpg';
@@ -16,7 +16,7 @@ import type { RoomType, WebsiteContent } from '@/types';
 import { getRoomTypes, getWebsiteContent } from '@/services/api';
 import { fallbackContentImages, resolveContentImage } from '@/lib/contentImages';
 
-const gallerySlides = [
+const fallbackGallerySlides = [
   { src: heroImg, alt: 'Hotel exterior' },
   { src: poolImg, alt: 'Outdoor pool' },
   { src: roomImg, alt: 'King room interior' },
@@ -46,9 +46,10 @@ export default function HomePage() {
   const featuredFaqs = (content?.faqs ?? []).slice(0, 4);
   const featuredAttractions = (content?.attractions ?? []).slice(0, 3);
   const showAttractionMedia = featuredAttractions.some(attraction => attraction.image);
-  const contentGallerySlides = content?.gallery.length
-    ? content.gallery.map(image => ({ src: resolveContentImage(image.url, fallbackContentImages.hero), alt: image.alt }))
-    : gallerySlides;
+  const contentGallerySlides = buildGallerySlides(content?.gallery.map(image => ({
+    src: resolveContentImage(image.url, fallbackContentImages.hero),
+    alt: image.alt,
+  })) ?? []);
   const contentRailImages = content?.gallery.length
     ? content.gallery.map(image => ({ src: resolveContentImage(image.url, fallbackContentImages.hero), alt: image.alt }))
     : railImages;
@@ -103,7 +104,7 @@ export default function HomePage() {
         <div className="relative container-wide pb-24 pt-40 z-10">
           <div className="max-w-2xl">
             <p className="text-overline text-primary-foreground/80 mb-3 [text-shadow:0_1px_2px_rgb(0_0_0_/_0.5)]">{hero?.heroSubtitle || 'Hollywood, Florida'}</p>
-            <h1 className="text-display text-primary-foreground mb-4 [text-shadow:0_2px_24px_rgb(0_0_0_/_0.55)]">{hero?.heroTitle || PROPERTY.name}</h1>
+            <h1 className="text-display text-primary-foreground mb-4 [text-shadow:0_2px_24px_rgb(0_0_0_/_0.55)]">{PROPERTY.brandTitle}</h1>
             <p className="text-body-lg text-primary-foreground/95 mb-8 [text-shadow:0_1px_8px_rgb(0_0_0_/_0.6)]">
               {hero?.heroDescription || 'Affordable comfort steps from Hollywood Beach. Free parking, pool, and Wi-Fi - book direct for the best rates.'}
             </p>
@@ -155,11 +156,7 @@ export default function HomePage() {
                 ))}
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <AutoRotatingGallery slides={[{ src: poolImg, alt: 'Pool' }, { src: beachImg, alt: 'Beach' }]} className="h-48 lg:h-64" />
-              <AutoRotatingGallery slides={[{ src: beachImg, alt: 'Beach' }, { src: poolImg, alt: 'Pool' }]} className="h-48 lg:h-64" interval={5000} />
-              <AutoRotatingGallery slides={contentGallerySlides} className="h-48 lg:h-64 col-span-2" interval={6000} />
-            </div>
+            <RotatingGalleryMosaic slides={contentGallerySlides} />
           </div>
         </div>
       </section>
@@ -370,4 +367,11 @@ export default function HomePage() {
       </section>
     </div>
   );
+}
+
+function buildGallerySlides(uploadedSlides: Array<{ src: string; alt: string }>) {
+  const uniqueSlides = [...uploadedSlides, ...fallbackGallerySlides].filter((slide, index, slides) => (
+    Boolean(slide.src) && slides.findIndex(candidate => candidate.src === slide.src) === index
+  ));
+  return uniqueSlides.slice(0, Math.max(uploadedSlides.length, 3));
 }

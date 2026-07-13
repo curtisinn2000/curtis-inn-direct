@@ -1,6 +1,7 @@
 export const PROPERTY = {
   name: 'Curtis Inn & Suites',
-  tagline: 'Your Hollywood, Florida Getaway',
+  tagline: 'Comfort That Feels Like Home.',
+  brandTitle: 'Curtis Inn & Suites — Comfort That Feels Like Home.',
   address: '1501 S Federal Hwy, Hollywood, FL',
   city: 'Hollywood',
   state: 'Florida',

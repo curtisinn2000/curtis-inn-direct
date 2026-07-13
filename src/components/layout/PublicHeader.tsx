@@ -32,8 +32,11 @@ export function PublicHeader() {
 
         {/* Main nav */}
         <div className="flex items-center justify-between h-16">
-          <Link to="/" className="flex items-center gap-2">
-            <span className="text-xl font-bold tracking-tight text-foreground">{PROPERTY.name}</span>
+          <Link to="/" className="flex min-w-0 flex-col leading-none" aria-label={PROPERTY.brandTitle}>
+            <span className="truncate text-lg font-bold text-foreground sm:text-xl">{PROPERTY.name}</span>
+            <span className="mt-1 hidden text-[10px] font-medium text-muted-foreground sm:block">
+              {PROPERTY.tagline}
+            </span>
           </Link>
 
           <nav className="hidden md:flex items-center gap-1">

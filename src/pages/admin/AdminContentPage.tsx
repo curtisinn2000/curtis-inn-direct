@@ -36,6 +36,7 @@ import {
 } from '@/services/api';
 import { resolveContentImage } from '@/lib/contentImages';
 import { GALLERY_CATEGORY_OPTIONS, formatGalleryCategory } from '@/lib/galleryCategories';
+import { PROPERTY } from '@/config/constants';
 import { GripVertical, ImageIcon, Loader2, Plus, Star, Trash2, Upload } from 'lucide-react';
 
 const emptyContent: WebsiteContent = {
@@ -121,7 +122,7 @@ export default function AdminContentPage() {
   async function saveHero() {
     setSaving(true);
     try {
-      const saved = await updateHeroContent(hero);
+      const saved = await updateHeroContent({ ...hero, heroTitle: PROPERTY.brandTitle });
       setContent(current => ({ ...current, hero: saved }));
       setHero(saved);
       toast({ title: 'Hero content saved', description: 'The homepage hero copy is now live.' });
@@ -410,8 +411,8 @@ export default function AdminContentPage() {
         <TabsContent value="hero">
           <Card className="p-6 space-y-4">
             <div>
-              <Label htmlFor="hero-title">Hero Title</Label>
-              <Input id="hero-title" value={hero.heroTitle} onChange={event => setHero({ ...hero, heroTitle: event.target.value })} />
+              <Label htmlFor="hero-title">Brand Heading</Label>
+              <Input id="hero-title" value={PROPERTY.brandTitle} readOnly className="bg-muted" />
             </div>
             <div>
               <Label htmlFor="hero-subtitle">Hero Subtitle</Label>
