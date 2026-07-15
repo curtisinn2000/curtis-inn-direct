@@ -30,3 +30,11 @@ export async function getReservationByConfirmation(
 ): Promise<ReservationLookupResult | null> {
   return apiRequest<ReservationLookupResult | null>('/reservations/lookup', jsonBody({ confirmationNumber, lastName }));
 }
+
+export async function sendReservationConfirmationEmail(input: {
+  confirmationNumber: string;
+  lastName: string;
+  email: string;
+}): Promise<{ ok: true; message: string }> {
+  return apiRequest('/reservations/confirmation-email', jsonBody(input));
+}

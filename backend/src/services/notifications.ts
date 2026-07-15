@@ -3,6 +3,7 @@ import twilio from 'twilio';
 import type { DbClient } from '../db.js';
 import { config, mailConfigured, twilioConfigured } from '../config.js';
 import { audit } from '../transformers.js';
+import { AppError, badRequest, configurationError, conflict } from '../errors.js';
 
 type NotificationChannel = 'email' | 'sms';
 type NotificationStatus = 'sent' | 'failed' | 'skipped';
@@ -95,6 +96,87 @@ export async function resendReservationConfirmationNotifications(
     [reservationId, templates],
   );
   await sendReservationConfirmationNotifications(db, reservationId);
+}
+
+export async function sendReservationConfirmationCopy(
+  db: DbClient,
+  input: { confirmationNumber: string; lastName: string; email: string },
+) {
+  const result = await db.query(
+    `select id, guest_email, status, payment_status
+     from reservations
+     where lower(confirmation_number) = lower($1)
+       and lower(guest_last_name) = lower($2)`,
+    [input.confirmationNumber, input.lastName],
+  );
+
+  if (!result.rowCount || String(result.rows[0].guest_email).toLowerCase() !== input.email.toLowerCase()) {
+    throw badRequest('reservation_email_mismatch', 'The email does not match this reservation.');
+  }
+  if (result.rows[0].status !== 'confirmed' || result.rows[0].payment_status !== 'paid') {
+    throw conflict('reservation_not_confirmed', 'Email confirmation is available after the reservation is confirmed and paid.');
+  }
+  if (!mailConfigured) {
+    throw configurationError('Reservation email is temporarily unavailable. Please contact the hotel.');
+  }
+
+  const reservation = await loadReservationNotification(db, String(result.rows[0].id));
+  if (!reservation) {
+    throw new AppError(404, 'reservation_not_found', 'Reservation was not found.');
+  }
+
+  const subject = `Your Curtis Inn & Suites Reservation Confirmation - ${reservation.confirmationNumber}`;
+  const text = guestEmailText(reservation);
+  const html = guestEmailHtml(reservation);
+  const delivery = await db.query(
+    `insert into notification_deliveries(
+       reservation_id, channel, template_type, recipient, subject, body_preview, status
+     ) values ($1, 'email', 'guest_lookup_confirmation', $2, $3, $4, 'pending')
+     on conflict (reservation_id, channel, template_type)
+     do update set
+       recipient = excluded.recipient,
+       subject = excluded.subject,
+       body_preview = excluded.body_preview,
+       status = 'pending',
+       provider_message_id = null,
+       error_text = null,
+       updated_at = now()
+     where notification_deliveries.updated_at <= now() - interval '60 seconds'
+     returning id`,
+    [reservation.id, input.email, subject, text.slice(0, 500)],
+  );
+
+  if (!delivery.rowCount) {
+    throw conflict('confirmation_email_cooldown', 'Confirmation was recently sent. Please wait one minute before trying again.');
+  }
+
+  const deliveryId = String(delivery.rows[0].id);
+  let messageId: string;
+  try {
+    const sent = await getMailTransport().sendMail({
+      from: config.MAIL_FROM,
+      to: input.email,
+      subject,
+      text,
+      html,
+    });
+    messageId = sent.messageId;
+  } catch (error) {
+    await finishDelivery(db, deliveryId, 'failed', undefined, errorMessage(error));
+    throw new AppError(502, 'confirmation_email_failed', 'The confirmation email could not be sent. Please try again.');
+  }
+
+  await finishDelivery(db, deliveryId, 'sent', messageId);
+  try {
+    await audit(db, {
+      entity: 'reservation',
+      entityId: reservation.id,
+      action: 'guest_confirmation_copy_sent',
+      after: { recipient: input.email, confirmationNumber: reservation.confirmationNumber },
+    });
+  } catch (error) {
+    console.error('guest_confirmation_copy_audit_failed', error);
+  }
 }
 
 async function loadReservationNotification(db: DbClient, reservationId: string, receiptUrl?: string | null): Promise<ReservationNotification | null> {

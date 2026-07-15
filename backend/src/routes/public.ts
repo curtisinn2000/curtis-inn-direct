@@ -7,6 +7,7 @@ import {
   availabilityQuoteSchema,
   createReservationSchema,
   lookupReservationSchema,
+  sendReservationConfirmationEmailSchema,
   validatePromoSchema,
 } from '../schemas.js';
 import { getActiveRooms, getRoomBySlug } from '../services/rooms.js';
@@ -14,6 +15,7 @@ import { searchAvailability } from '../services/availability.js';
 import { createReservation, lookupReservation, quoteReservation } from '../services/reservations.js';
 import { notFound } from '../errors.js';
 import { getWebsiteContent } from '../services/content.js';
+import { sendReservationConfirmationCopy } from '../services/notifications.js';
 
 export const publicRouter = Router();
 
@@ -22,6 +24,19 @@ const publicWriteLimiter = rateLimit({
   limit: 10,
   standardHeaders: true,
   legacyHeaders: false,
+});
+
+const confirmationEmailLimiter = rateLimit({
+  windowMs: 15 * 60_000,
+  limit: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    error: {
+      code: 'confirmation_email_rate_limited',
+      message: 'Too many email requests. Please wait and try again.',
+    },
+  },
 });
 
 publicRouter.get('/health', (_req, res) => {
@@ -81,6 +96,12 @@ publicRouter.post('/reservations/lookup', publicWriteLimiter, asyncHandler(async
   const input = lookupReservationSchema.parse(req.body);
   const result = await lookupReservation(pool, input.confirmationNumber, input.lastName);
   res.json(result);
+}));
+
+publicRouter.post('/reservations/confirmation-email', confirmationEmailLimiter, asyncHandler(async (req, res) => {
+  const input = sendReservationConfirmationEmailSchema.parse(req.body);
+  await sendReservationConfirmationCopy(pool, input);
+  res.json({ ok: true, message: 'Reservation confirmation sent.' });
 }));
 
 publicRouter.post('/promo/validate', asyncHandler(async (req, res) => {

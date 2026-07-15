@@ -59,6 +59,10 @@ export const lookupReservationSchema = z.object({
   lastName: z.string().trim().min(1).max(80),
 });
 
+export const sendReservationConfirmationEmailSchema = lookupReservationSchema.extend({
+  email: z.string().trim().email().max(200),
+});
+
 export const validatePromoSchema = z.object({
   code: z.string().trim().min(1).max(40),
   totalCents: z.coerce.number().int().min(0).optional(),

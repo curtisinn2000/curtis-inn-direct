@@ -11,8 +11,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Search, Loader2, AlertCircle, Phone, Mail, CalendarDays, Users, CreditCard } from 'lucide-react';
-import { getReservationByConfirmation, type ReservationLookupResult } from '@/services/reservationLookup';
+import { Search, Loader2, AlertCircle, Phone, Mail, CalendarDays, Users, CreditCard, CheckCircle2, Send } from 'lucide-react';
+import {
+  getReservationByConfirmation,
+  sendReservationConfirmationEmail,
+  type ReservationLookupResult,
+} from '@/services/reservationLookup';
 import { cn } from '@/lib/utils';
 
 const statusLabel: Record<string, string> = {
@@ -54,6 +58,10 @@ export function ReservationLookupModal({ trigger }: ReservationLookupModalProps)
   const [result, setResult] = useState<ReservationLookupResult | null>(null);
   const [searched, setSearched] = useState(false);
   const [error, setError] = useState('');
+  const [email, setEmail] = useState('');
+  const [emailSending, setEmailSending] = useState(false);
+  const [emailError, setEmailError] = useState('');
+  const [emailSent, setEmailSent] = useState(false);
 
   const reset = () => {
     setConfirmationNumber('');
@@ -62,6 +70,10 @@ export function ReservationLookupModal({ trigger }: ReservationLookupModalProps)
     setSearched(false);
     setError('');
     setLoading(false);
+    setEmail('');
+    setEmailSending(false);
+    setEmailError('');
+    setEmailSent(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -85,6 +97,27 @@ export function ReservationLookupModal({ trigger }: ReservationLookupModalProps)
       setError('Something went wrong. Please try again.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleEmailSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!result || !email.trim()) return;
+
+    setEmailSending(true);
+    setEmailError('');
+    setEmailSent(false);
+    try {
+      await sendReservationConfirmationEmail({
+        confirmationNumber: result.confirmationNumber,
+        lastName,
+        email: email.trim(),
+      });
+      setEmailSent(true);
+    } catch (requestError) {
+      setEmailError(requestError instanceof Error ? requestError.message : 'The confirmation email could not be sent.');
+    } finally {
+      setEmailSending(false);
     }
   };
 
@@ -202,6 +235,51 @@ export function ReservationLookupModal({ trigger }: ReservationLookupModalProps)
                 <span className="text-base font-semibold">${result.totalAmount.toFixed(2)}</span>
               </div>
             </div>
+
+            {result.status === 'confirmed' && result.paymentStatus === 'paid' && (
+              <form onSubmit={handleEmailSubmit} className="rounded-lg border border-border bg-card p-4 space-y-3">
+                <div className="space-y-1">
+                  <p className="text-sm font-medium">Email your confirmation</p>
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    Enter the email address used for this reservation.
+                  </p>
+                </div>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Label htmlFor="confirmation-email" className="sr-only">Reservation email</Label>
+                  <Input
+                    id="confirmation-email"
+                    type="email"
+                    autoComplete="email"
+                    placeholder="Email on reservation"
+                    value={email}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      setEmailError('');
+                      setEmailSent(false);
+                    }}
+                    disabled={emailSending}
+                    required
+                    className="h-10 min-w-0 flex-1"
+                  />
+                  <Button type="submit" className="h-10 shrink-0" disabled={emailSending || !email.trim()}>
+                    {emailSending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                    Send
+                  </Button>
+                </div>
+                {emailSent && (
+                  <div className="flex items-center gap-2 text-xs font-medium text-green-700" role="status">
+                    <CheckCircle2 className="h-4 w-4 shrink-0" />
+                    Confirmation sent. Please check your inbox and spam folder.
+                  </div>
+                )}
+                {emailError && (
+                  <div className="flex items-start gap-2 text-xs text-destructive" role="alert">
+                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                    <span>{emailError}</span>
+                  </div>
+                )}
+              </form>
+            )}
 
             <div className="rounded-lg bg-muted/40 p-4 space-y-2">
               <p className="text-sm font-medium">Need to make changes?</p>
