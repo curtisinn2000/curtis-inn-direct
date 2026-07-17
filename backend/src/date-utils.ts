@@ -6,6 +6,11 @@ export function parseDateOnly(value: string): Date {
   return new Date(Date.UTC(year, month - 1, day));
 }
 
+export function dateOnlyKey(value: unknown): string {
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  return String(value ?? '').slice(0, 10);
+}
+
 export function diffDays(start: string, end: string): number {
   return Math.round((parseDateOnly(end).getTime() - parseDateOnly(start).getTime()) / MS_PER_DAY);
 }

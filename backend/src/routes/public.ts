@@ -16,6 +16,9 @@ import { createReservation, lookupReservation, quoteReservation } from '../servi
 import { notFound } from '../errors.js';
 import { getWebsiteContent } from '../services/content.js';
 import { sendReservationConfirmationCopy } from '../services/notifications.js';
+import { loadVerifiedReservationConfirmation } from '../services/notifications.js';
+import { createReservationConfirmationPdf } from '../services/confirmationPdf.js';
+import { audit } from '../transformers.js';
 
 export const publicRouter = Router();
 
@@ -35,6 +38,19 @@ const confirmationEmailLimiter = rateLimit({
     error: {
       code: 'confirmation_email_rate_limited',
       message: 'Too many email requests. Please wait and try again.',
+    },
+  },
+});
+
+const confirmationPdfLimiter = rateLimit({
+  windowMs: 15 * 60_000,
+  limit: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    error: {
+      code: 'confirmation_pdf_rate_limited',
+      message: 'Too many PDF requests. Please wait and try again.',
     },
   },
 });
@@ -102,6 +118,34 @@ publicRouter.post('/reservations/confirmation-email', confirmationEmailLimiter, 
   const input = sendReservationConfirmationEmailSchema.parse(req.body);
   await sendReservationConfirmationCopy(pool, input);
   res.json({ ok: true, message: 'Reservation confirmation sent.' });
+}));
+
+publicRouter.post('/reservations/confirmation-pdf', confirmationPdfLimiter, asyncHandler(async (req, res) => {
+  const input = lookupReservationSchema.parse(req.body);
+  const reservation = await loadVerifiedReservationConfirmation(pool, input.confirmationNumber, input.lastName);
+  const pdf = await createReservationConfirmationPdf(reservation);
+  const safeConfirmationNumber = reservation.confirmationNumber.replace(/[^A-Za-z0-9-]/g, '');
+
+  try {
+    await audit(pool, {
+      entity: 'reservation',
+      entityId: reservation.id,
+      action: 'guest_confirmation_pdf_downloaded',
+      after: { confirmationNumber: reservation.confirmationNumber },
+    });
+  } catch (error) {
+    console.error('guest_confirmation_pdf_audit_failed', error);
+  }
+
+  res.set({
+    'Content-Type': 'application/pdf',
+    'Content-Disposition': `attachment; filename="Curtis-Inn-Reservation-${safeConfirmationNumber}.pdf"`,
+    'Content-Length': String(pdf.length),
+    'Cache-Control': 'no-store, max-age=0',
+    Pragma: 'no-cache',
+    'X-Content-Type-Options': 'nosniff',
+  });
+  res.send(pdf);
 }));
 
 publicRouter.post('/promo/validate', asyncHandler(async (req, res) => {

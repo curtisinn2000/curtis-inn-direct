@@ -1,5 +1,5 @@
 import type { Reservation } from '@/types';
-import { apiRequest, jsonBody } from './client';
+import { apiBlobRequest, apiRequest, jsonBody } from './client';
 
 export interface ReservationLookupRoomLine {
   roomTypeId: string;
@@ -37,4 +37,11 @@ export async function sendReservationConfirmationEmail(input: {
   email: string;
 }): Promise<{ ok: true; message: string }> {
   return apiRequest('/reservations/confirmation-email', jsonBody(input));
+}
+
+export async function downloadReservationConfirmationPdf(input: {
+  confirmationNumber: string;
+  lastName: string;
+}): Promise<Blob> {
+  return apiBlobRequest('/reservations/confirmation-pdf', jsonBody(input));
 }

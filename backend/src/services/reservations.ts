@@ -1,7 +1,7 @@
 import type { DbClient } from '../db.js';
 import { withTransaction } from '../db.js';
 import { config } from '../config.js';
-import { eachStayDate, hotelTodayKey } from '../date-utils.js';
+import { dateOnlyKey, eachStayDate, hotelTodayKey } from '../date-utils.js';
 import { badRequest, conflict } from '../errors.js';
 import { audit, reservationFromRow } from '../transformers.js';
 import { lockRoomDates, priceAndAvailabilityForRoom, validateStayWindow } from './availability.js';
@@ -318,8 +318,8 @@ export async function lookupReservation(db: DbClient, confirmationNumber: string
   return {
     confirmationNumber: row.confirmation_number,
     guestName: `${row.guest_first_name} ${row.guest_last_name}`,
-    checkIn: row.check_in,
-    checkOut: row.check_out,
+    checkIn: dateOnlyKey(row.check_in),
+    checkOut: dateOnlyKey(row.check_out),
     guests: row.guests,
     roomType: row.room_type_summary,
     roomLines: row.room_lines,

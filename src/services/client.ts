@@ -34,6 +34,32 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
   return data as T;
 }
 
+export async function apiBlobRequest(path: string, options: RequestInit = {}): Promise<Blob> {
+  const token = getAdminToken();
+  const headers = new Headers(options.headers);
+  if (options.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+
+  const response = await fetch(`${API_BASE_URL}${path}`, { ...options, headers });
+  if (!response.ok) {
+    const raw = await response.text();
+    let data: { error?: { message?: string; code?: string; details?: unknown } } | null = null;
+    try {
+      data = raw ? JSON.parse(raw) : null;
+    } catch {
+      data = null;
+    }
+    const error = new Error(data?.error?.message ?? `Request failed: ${response.status}`) as Error & {
+      code?: string;
+      details?: unknown;
+    };
+    error.code = data?.error?.code;
+    error.details = data?.error?.details;
+    throw error;
+  }
+  return response.blob();
+}
+
 export function jsonBody(body: unknown): RequestInit {
   return {
     method: 'POST',

@@ -11,8 +11,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Search, Loader2, AlertCircle, Phone, Mail, CalendarDays, Users, CreditCard, CheckCircle2, Send } from 'lucide-react';
+import { Search, Loader2, AlertCircle, Phone, Mail, CalendarDays, Users, CreditCard, CheckCircle2, Download, Send } from 'lucide-react';
 import {
+  downloadReservationConfirmationPdf,
   getReservationByConfirmation,
   sendReservationConfirmationEmail,
   type ReservationLookupResult,
@@ -62,6 +63,9 @@ export function ReservationLookupModal({ trigger }: ReservationLookupModalProps)
   const [emailSending, setEmailSending] = useState(false);
   const [emailError, setEmailError] = useState('');
   const [emailSent, setEmailSent] = useState(false);
+  const [pdfDownloading, setPdfDownloading] = useState(false);
+  const [pdfDownloaded, setPdfDownloaded] = useState(false);
+  const [pdfError, setPdfError] = useState('');
 
   const reset = () => {
     setConfirmationNumber('');
@@ -74,6 +78,36 @@ export function ReservationLookupModal({ trigger }: ReservationLookupModalProps)
     setEmailSending(false);
     setEmailError('');
     setEmailSent(false);
+    setPdfDownloading(false);
+    setPdfDownloaded(false);
+    setPdfError('');
+  };
+
+  const handlePdfDownload = async () => {
+    if (!result) return;
+    setPdfDownloading(true);
+    setPdfDownloaded(false);
+    setPdfError('');
+    try {
+      const pdf = await downloadReservationConfirmationPdf({
+        confirmationNumber: result.confirmationNumber,
+        lastName,
+      });
+      const url = URL.createObjectURL(pdf);
+      const link = document.createElement('a');
+      const safeConfirmationNumber = result.confirmationNumber.replace(/[^A-Za-z0-9-]/g, '');
+      link.href = url;
+      link.download = `Curtis-Inn-Reservation-${safeConfirmationNumber}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
+      setPdfDownloaded(true);
+    } catch (requestError) {
+      setPdfError(requestError instanceof Error ? requestError.message : 'The confirmation PDF could not be downloaded.');
+    } finally {
+      setPdfDownloading(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -237,48 +271,69 @@ export function ReservationLookupModal({ trigger }: ReservationLookupModalProps)
             </div>
 
             {result.status === 'confirmed' && result.paymentStatus === 'paid' && (
-              <form onSubmit={handleEmailSubmit} className="rounded-lg border border-border bg-card p-4 space-y-3">
+              <div className="rounded-lg border border-border bg-card p-4 space-y-4">
                 <div className="space-y-1">
-                  <p className="text-sm font-medium">Email your confirmation</p>
+                  <p className="text-sm font-medium">Get your confirmation</p>
                   <p className="text-xs leading-relaxed text-muted-foreground">
-                    Enter the email address used for this reservation.
+                    Download a PDF or send a copy to the email used for this reservation.
                   </p>
                 </div>
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <Label htmlFor="confirmation-email" className="sr-only">Reservation email</Label>
-                  <Input
-                    id="confirmation-email"
-                    type="email"
-                    autoComplete="email"
-                    placeholder="Email on reservation"
-                    value={email}
-                    onChange={(e) => {
-                      setEmail(e.target.value);
-                      setEmailError('');
-                      setEmailSent(false);
-                    }}
-                    disabled={emailSending}
-                    required
-                    className="h-10 min-w-0 flex-1"
-                  />
-                  <Button type="submit" className="h-10 shrink-0" disabled={emailSending || !email.trim()}>
-                    {emailSending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-                    Send
+                <div className="space-y-2">
+                  <Button type="button" variant="outline" className="h-10 w-full" onClick={handlePdfDownload} disabled={pdfDownloading}>
+                    {pdfDownloading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                    {pdfDownloading ? 'Preparing PDF' : 'Download PDF'}
                   </Button>
+                  {pdfDownloaded && (
+                    <div className="flex items-center gap-2 text-xs font-medium text-green-700" role="status">
+                      <CheckCircle2 className="h-4 w-4 shrink-0" />
+                      PDF downloaded.
+                    </div>
+                  )}
+                  {pdfError && (
+                    <div className="flex items-start gap-2 text-xs text-destructive" role="alert">
+                      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                      <span>{pdfError}</span>
+                    </div>
+                  )}
                 </div>
-                {emailSent && (
-                  <div className="flex items-center gap-2 text-xs font-medium text-green-700" role="status">
-                    <CheckCircle2 className="h-4 w-4 shrink-0" />
-                    Confirmation sent. Please check your inbox and spam folder.
+
+                <form onSubmit={handleEmailSubmit} className="space-y-2 border-t border-border/70 pt-4">
+                  <Label htmlFor="confirmation-email" className="text-xs font-medium">Email confirmation</Label>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <Input
+                      id="confirmation-email"
+                      type="email"
+                      autoComplete="email"
+                      placeholder="Email on reservation"
+                      value={email}
+                      onChange={(e) => {
+                        setEmail(e.target.value);
+                        setEmailError('');
+                        setEmailSent(false);
+                      }}
+                      disabled={emailSending}
+                      required
+                      className="h-10 min-w-0 flex-1"
+                    />
+                    <Button type="submit" className="h-10 shrink-0" disabled={emailSending || !email.trim()}>
+                      {emailSending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                      Send
+                    </Button>
                   </div>
-                )}
-                {emailError && (
-                  <div className="flex items-start gap-2 text-xs text-destructive" role="alert">
-                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                    <span>{emailError}</span>
-                  </div>
-                )}
-              </form>
+                  {emailSent && (
+                    <div className="flex items-center gap-2 text-xs font-medium text-green-700" role="status">
+                      <CheckCircle2 className="h-4 w-4 shrink-0" />
+                      Confirmation sent. Please check your inbox and spam folder.
+                    </div>
+                  )}
+                  {emailError && (
+                    <div className="flex items-start gap-2 text-xs text-destructive" role="alert">
+                      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                      <span>{emailError}</span>
+                    </div>
+                  )}
+                </form>
+              </div>
             )}
 
             <div className="rounded-lg bg-muted/40 p-4 space-y-2">

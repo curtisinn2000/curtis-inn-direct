@@ -4,6 +4,7 @@ import type { DbClient } from '../db.js';
 import { config, mailConfigured, twilioConfigured } from '../config.js';
 import { audit } from '../transformers.js';
 import { AppError, badRequest, configurationError, conflict } from '../errors.js';
+import { dateOnlyKey } from '../date-utils.js';
 
 type NotificationChannel = 'email' | 'sms';
 type NotificationStatus = 'sent' | 'failed' | 'skipped';
@@ -21,7 +22,7 @@ type NightlyRate = {
   rateCents: number;
 };
 
-type ReservationNotification = {
+export type ReservationNotification = {
   id: string;
   confirmationNumber: string;
   checkIn: string;
@@ -102,27 +103,12 @@ export async function sendReservationConfirmationCopy(
   db: DbClient,
   input: { confirmationNumber: string; lastName: string; email: string },
 ) {
-  const result = await db.query(
-    `select id, guest_email, status, payment_status
-     from reservations
-     where lower(confirmation_number) = lower($1)
-       and lower(guest_last_name) = lower($2)`,
-    [input.confirmationNumber, input.lastName],
-  );
-
-  if (!result.rowCount || String(result.rows[0].guest_email).toLowerCase() !== input.email.toLowerCase()) {
+  const reservation = await loadVerifiedReservationConfirmation(db, input.confirmationNumber, input.lastName);
+  if (reservation.guestEmail.toLowerCase() !== input.email.toLowerCase()) {
     throw badRequest('reservation_email_mismatch', 'The email does not match this reservation.');
-  }
-  if (result.rows[0].status !== 'confirmed' || result.rows[0].payment_status !== 'paid') {
-    throw conflict('reservation_not_confirmed', 'Email confirmation is available after the reservation is confirmed and paid.');
   }
   if (!mailConfigured) {
     throw configurationError('Reservation email is temporarily unavailable. Please contact the hotel.');
-  }
-
-  const reservation = await loadReservationNotification(db, String(result.rows[0].id));
-  if (!reservation) {
-    throw new AppError(404, 'reservation_not_found', 'Reservation was not found.');
   }
 
   const subject = `Your Curtis Inn & Suites Reservation Confirmation - ${reservation.confirmationNumber}`;
@@ -179,7 +165,34 @@ export async function sendReservationConfirmationCopy(
   }
 }
 
-async function loadReservationNotification(db: DbClient, reservationId: string, receiptUrl?: string | null): Promise<ReservationNotification | null> {
+export async function loadVerifiedReservationConfirmation(
+  db: DbClient,
+  confirmationNumber: string,
+  lastName: string,
+) {
+  const result = await db.query(
+    `select id, status, payment_status
+     from reservations
+     where lower(confirmation_number) = lower($1)
+       and lower(guest_last_name) = lower($2)`,
+    [confirmationNumber, lastName],
+  );
+
+  if (!result.rowCount) {
+    throw badRequest('reservation_lookup_invalid', 'The confirmation number or last name is incorrect.');
+  }
+  if (result.rows[0].status !== 'confirmed' || result.rows[0].payment_status !== 'paid') {
+    throw conflict('reservation_not_confirmed', 'Confirmation documents are available after the reservation is confirmed and paid.');
+  }
+
+  const reservation = await loadReservationNotification(db, String(result.rows[0].id));
+  if (!reservation) {
+    throw new AppError(404, 'reservation_not_found', 'Reservation was not found.');
+  }
+  return reservation;
+}
+
+export async function loadReservationNotification(db: DbClient, reservationId: string, receiptUrl?: string | null): Promise<ReservationNotification | null> {
   const result = await db.query(
     `select
        r.id,
@@ -245,8 +258,8 @@ async function loadReservationNotification(db: DbClient, reservationId: string, 
   return {
     id: String(row.id),
     confirmationNumber: String(row.confirmation_number),
-    checkIn: dateKey(row.check_in),
-    checkOut: dateKey(row.check_out),
+    checkIn: dateOnlyKey(row.check_in),
+    checkOut: dateOnlyKey(row.check_out),
     nights: Number(row.nights),
     guests: Number(row.guests),
     rooms: Number(row.rooms),
@@ -267,7 +280,7 @@ async function loadReservationNotification(db: DbClient, reservationId: string, 
     roomLines: parseJsonArray<RoomLine>(row.room_lines),
     nightlyRates: parseJsonArray<NightlyRate>(row.nightly_rates).map(rate => ({
       ...rate,
-      date: dateKey(rate.date),
+      date: dateOnlyKey(rate.date),
       rooms: Number(rate.rooms),
       rateCents: Number(rate.rateCents),
     })),
@@ -593,11 +606,6 @@ function roomSummary(reservation: ReservationNotification) {
 
 function guestName(reservation: ReservationNotification) {
   return `${reservation.guestFirstName} ${reservation.guestLastName}`.trim();
-}
-
-function dateKey(value: unknown) {
-  if (value instanceof Date) return value.toISOString().slice(0, 10);
-  return String(value ?? '').slice(0, 10);
 }
 
 function formatDate(value: string) {
