@@ -27,6 +27,10 @@ const envSchema = z.object({
   TWILIO_MESSAGING_SERVICE_SID: z.string().optional().default(''),
   TWILIO_FROM_NUMBER: z.string().optional().default(''),
   GCS_CONTENT_BUCKET: z.string().optional().default(''),
+  GCP_PROJECT_ID: z.string().optional().default(''),
+  GMAIL_SMTP_PASS_SECRET_ID: z.string().optional().default('curtis-inn-gmail-pass'),
+  STRIPE_SECRET_KEY_SECRET_ID: z.string().optional().default('curtis-inn-stripe-secret-key'),
+  STRIPE_WEBHOOK_SECRET_SECRET_ID: z.string().optional().default('curtis-inn-stripe-webhook-secret'),
 });
 
 export const config = envSchema.parse(process.env);

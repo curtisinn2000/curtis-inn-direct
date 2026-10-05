@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import type { Transporter } from 'nodemailer';
 import twilio from 'twilio';
 import type { DbClient } from '../db.js';
 import { config, mailConfigured, twilioConfigured } from '../config.js';
@@ -48,7 +49,7 @@ export type ReservationNotification = {
   nightlyRates: NightlyRate[];
 };
 
-let mailTransport: nodemailer.Transporter | null = null;
+let mailTransport: Transporter | null = null;
 let twilioClient: ReturnType<typeof twilio> | null = null;
 
 export async function sendReservationConfirmationNotifications(db: DbClient, reservationId: string, receiptUrl?: string | null) {

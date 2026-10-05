@@ -1,0 +1,17 @@
+export const ADMIN_PERMISSIONS = {
+  dashboardRead: 'dashboard.read',
+  reservationsRead: 'reservations.read',
+  availabilityRead: 'availability.read',
+  roomsRead: 'rooms.read',
+  ratesRead: 'rates.read',
+  paymentsRead: 'payments.read',
+  contentRead: 'content.read',
+  reportsRead: 'reports.read',
+  profileManage: 'profile.manage',
+  usersManage: 'users.manage',
+  policiesRead: 'policies.read',
+  policiesManage: 'policies.manage',
+  integrationsRead: 'integrations.read',
+  integrationsManage: 'integrations.manage',
+  auditRead: 'audit.read',
+} as const;

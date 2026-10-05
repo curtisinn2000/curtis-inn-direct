@@ -59,6 +59,11 @@ Required backend env vars:
 - `GMAIL_SMTP_USER`
 - `GMAIL_SMTP_PASS`
 - `MAIL_FROM`
+- `HOTEL_NOTIFICATIONS_EMAIL`
+- `GCP_PROJECT_ID`
+- `GMAIL_SMTP_PASS_SECRET_ID`
+- `STRIPE_SECRET_KEY_SECRET_ID`
+- `STRIPE_WEBHOOK_SECRET_SECRET_ID`
 
 Frontend Vercel env:
 
@@ -106,6 +111,49 @@ $webhookSecret | gcloud secrets versions add curtis-inn-stripe-webhook-secret --
 ```
 
 After Cloud Run is deployed, set production env vars/secrets on the Cloud Run service. Do not put Stripe secret keys, Gmail, JWT, or database secrets in Vercel.
+
+### Admin Settings and Secret Manager
+
+The Settings Integrations tab is write-only for secrets. PostgreSQL stores only masked status, safe display fields, timestamps, and test results. Secret values are added as new versions in GCP Secret Manager and are never returned by the API or written to the audit log.
+
+Configure these Cloud Run environment variables:
+
+```text
+GCP_PROJECT_ID=curts-inn-website
+GMAIL_SMTP_PASS_SECRET_ID=curtis-inn-gmail-pass
+STRIPE_SECRET_KEY_SECRET_ID=curtis-inn-stripe-secret-key
+STRIPE_WEBHOOK_SECRET_SECRET_ID=curtis-inn-stripe-webhook-secret
+```
+
+The existing Cloud Run secret bindings remain required:
+
+```text
+GMAIL_SMTP_PASS=curtis-inn-gmail-pass:latest
+STRIPE_SECRET_KEY=curtis-inn-stripe-secret-key:latest
+STRIPE_WEBHOOK_SECRET=curtis-inn-stripe-webhook-secret:latest
+```
+
+Grant the Cloud Run runtime service account permission to add secret versions only to those three secrets. Do not grant project-wide Secret Manager administration:
+
+```powershell
+$project = "curts-inn-website"
+$serviceAccount = "CLOUD_RUN_RUNTIME_SERVICE_ACCOUNT"
+$secrets = @(
+  "curtis-inn-gmail-pass",
+  "curtis-inn-stripe-secret-key",
+  "curtis-inn-stripe-webhook-secret"
+)
+foreach ($secret in $secrets) {
+  gcloud secrets add-iam-policy-binding $secret `
+    --project=$project `
+    --member="serviceAccount:$serviceAccount" `
+    --role="roles/secretmanager.secretVersionAdder"
+}
+```
+
+Adding a new secret version does not mutate the currently running process environment. Redeploy or restart the Cloud Run revision after replacing a production secret so the `:latest` binding is loaded. Use the Settings test actions after the new revision is serving traffic.
+
+Migration `011_admin_access_and_settings.sql` converts existing `admin` accounts to the predefined Owner role. Apply it before deploying the backend revision that contains permission checks.
 
 ## Migration Notes
 

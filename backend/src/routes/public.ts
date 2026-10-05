@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { pool } from '../db.js';
+import { policyFromRow } from '../services/policies.js';
 import { asyncHandler } from '../middleware.js';
 import {
   availabilitySearchSchema,
@@ -21,6 +22,11 @@ import { createReservationConfirmationPdf } from '../services/confirmationPdf.js
 import { audit } from '../transformers.js';
 
 export const publicRouter = Router();
+
+publicRouter.get('/policies', asyncHandler(async (_req, res) => {
+  const result = await pool.query(`select * from hotel_policy_settings where singleton_key = true`);
+  res.json(policyFromRow(result.rows[0]));
+}));
 
 const publicWriteLimiter = rateLimit({
   windowMs: 60_000,

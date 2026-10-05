@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Card } from '@/components/ui/card';
 import { PROPERTY } from '@/config/constants';
 import { apiRequest, jsonBody, setAdminToken } from '@/services/client';
+import type { AdminSessionUser } from '@/types';
 
 export default function AdminLoginPage() {
   const navigate = useNavigate();
@@ -19,9 +20,9 @@ export default function AdminLoginPage() {
     setLoading(true);
     setError('');
     try {
-      const result = await apiRequest<{ token: string }>('/auth/login', jsonBody({ email, password }));
+      const result = await apiRequest<{ token: string; user: AdminSessionUser }>('/auth/login', jsonBody({ email, password }));
       setAdminToken(result.token);
-      navigate('/admin');
+      navigate(result.user.permissions.includes('dashboard.read') ? '/admin' : '/admin/reservations');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to sign in.');
     } finally {

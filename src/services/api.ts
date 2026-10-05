@@ -21,6 +21,11 @@ import type {
   RoomOption,
   RoomOptionsCatalog,
   WebsiteContent,
+  AdminAccount,
+  AdminRoleDefinition,
+  AdminSessionUser,
+  HotelPolicies,
+  IntegrationSettings,
 } from '@/types';
 import { apiRequest, jsonBody } from './client';
 
@@ -247,6 +252,82 @@ export async function getPayments(): Promise<Payment[]> {
 
 export async function getAuditLogs(): Promise<AuditLog[]> {
   return apiRequest<AuditLog[]>('/admin/audit-log');
+}
+
+export async function getAdminSession(): Promise<{ user: AdminSessionUser }> {
+  return apiRequest<{ user: AdminSessionUser }>('/auth/me');
+}
+
+export async function getAdminProfile() {
+  return apiRequest<{ id: string; email: string; displayName: string; roleNames: string[]; lastLoginAt: string | null }>('/admin/settings/profile');
+}
+
+export async function updateAdminProfile(displayName: string) {
+  return apiRequest<{ ok: true; displayName: string }>('/admin/settings/profile', { method: 'PUT', body: JSON.stringify({ displayName }) });
+}
+
+export async function changeAdminPassword(currentPassword: string, newPassword: string) {
+  return apiRequest<{ ok: true }>('/admin/settings/profile/password', { method: 'PUT', body: JSON.stringify({ currentPassword, newPassword }) });
+}
+
+export async function getAdminAccounts(): Promise<AdminAccount[]> {
+  return apiRequest<AdminAccount[]>('/admin/settings/users');
+}
+
+export async function getAdminRoles(): Promise<AdminRoleDefinition[]> {
+  return apiRequest<AdminRoleDefinition[]>('/admin/settings/roles');
+}
+
+export async function inviteAdminUser(data: { displayName: string; email: string; roleKey: string }) {
+  return apiRequest<{ ok: true; userId: string; expiresAt: string }>('/admin/settings/users/invitations', jsonBody(data));
+}
+
+export async function resendAdminInvitation(userId: string) {
+  return apiRequest<{ ok: true }>(`/admin/settings/users/${encodeURIComponent(userId)}/resend-invitation`, { method: 'POST' });
+}
+
+export async function updateAdminUserRole(userId: string, roleKey: string) {
+  return apiRequest<{ ok: true }>(`/admin/settings/users/${encodeURIComponent(userId)}/role`, { method: 'PATCH', body: JSON.stringify({ roleKey }) });
+}
+
+export async function updateAdminUserStatus(userId: string, isActive: boolean) {
+  return apiRequest<{ ok: true }>(`/admin/settings/users/${encodeURIComponent(userId)}/status`, { method: 'PATCH', body: JSON.stringify({ isActive }) });
+}
+
+export async function inspectAdminInvitation(token: string) {
+  return apiRequest<{ email: string; displayName: string; roleName: string; expiresAt: string }>('/auth/invitations/inspect', jsonBody({ token }));
+}
+
+export async function acceptAdminInvitation(data: { token: string; displayName: string; password: string }) {
+  return apiRequest<{ ok: true }>('/auth/invitations/accept', jsonBody(data));
+}
+
+export async function getHotelPolicies(): Promise<HotelPolicies> {
+  return apiRequest<HotelPolicies>('/policies');
+}
+
+export async function getAdminHotelPolicies(): Promise<HotelPolicies> {
+  return apiRequest<HotelPolicies>('/admin/settings/policies');
+}
+
+export async function updateHotelPolicies(data: HotelPolicies): Promise<HotelPolicies> {
+  return apiRequest<HotelPolicies>('/admin/settings/policies', { method: 'PUT', body: JSON.stringify(data) });
+}
+
+export async function getIntegrationSettings(): Promise<IntegrationSettings> {
+  return apiRequest<IntegrationSettings>('/admin/settings/integrations');
+}
+
+export async function updateEmailIntegration(data: Record<string, unknown>) {
+  return apiRequest<{ ok: true; configured: boolean; secretMask: string; message: string }>('/admin/settings/integrations/email', { method: 'PUT', body: JSON.stringify(data) });
+}
+
+export async function updateStripeIntegration(data: Record<string, unknown>) {
+  return apiRequest<{ ok: true; configured: boolean; secretMask: string; message: string }>('/admin/settings/integrations/stripe', { method: 'PUT', body: JSON.stringify(data) });
+}
+
+export async function testIntegration(provider: 'email' | 'stripe') {
+  return apiRequest<{ ok: true; message: string }>(`/admin/settings/integrations/${provider}/test`, { method: 'POST' });
 }
 
 export async function getRateRules(): Promise<RoomRateRule[]> {

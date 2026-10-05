@@ -4,13 +4,15 @@ import multer from 'multer';
 import { ZodError } from 'zod';
 import { config } from './config.js';
 import { AppError, forbidden, unauthorized } from './errors.js';
-import { pool } from './db.js';
+import { pool, type DbClient } from './db.js';
 
 export type AdminUser = {
   id: string;
   email: string;
   displayName: string;
-  roles: string[];
+  roleKeys: string[];
+  roleNames: string[];
+  permissions: string[];
 };
 
 declare global {
@@ -79,31 +81,45 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
     const decoded = jwt.verify(token, config.JWT_SECRET) as { sub?: string };
     if (!decoded.sub) return next(unauthorized());
 
-    const result = await pool.query(
-      `select u.id, u.email, u.display_name, array_agg(ur.role::text order by ur.role::text) as roles
-       from app_users u
-       join user_roles ur on ur.user_id = u.id
-       where u.id = $1 and u.is_active = true
-       group by u.id`,
-      [decoded.sub],
-    );
-
-    if (result.rowCount === 0) return next(unauthorized());
-    const row = result.rows[0];
-    req.user = {
-      id: row.id,
-      email: row.email,
-      displayName: row.display_name,
-      roles: row.roles ?? [],
-    };
+    const user = await loadActiveAdminUser(pool, decoded.sub);
+    if (!user) return next(unauthorized());
+    req.user = user;
     return next();
   } catch {
     return next(unauthorized());
   }
 }
 
+export async function loadActiveAdminUser(db: DbClient, userId: string): Promise<AdminUser | null> {
+    const result = await db.query(
+      `select u.id, u.email, u.display_name,
+         array_agg(distinct ur.role_key order by ur.role_key) as role_keys,
+         array_agg(distinct ar.name order by ar.name) as role_names,
+         coalesce(array_agg(distinct arp.permission_key order by arp.permission_key)
+           filter (where arp.permission_key is not null), '{}') as permissions
+       from app_users u
+       join user_roles ur on ur.user_id = u.id
+       join admin_roles ar on ar.role_key = ur.role_key
+       left join admin_role_permissions arp on arp.role_key = ur.role_key
+       where u.id = $1 and u.is_active = true
+       group by u.id`,
+      [userId],
+    );
+
+    if (result.rowCount === 0) return null;
+    const row = result.rows[0];
+    return {
+      id: row.id,
+      email: row.email,
+      displayName: row.display_name,
+      roleKeys: row.role_keys ?? [],
+      roleNames: row.role_names ?? [],
+      permissions: row.permissions ?? [],
+    };
+}
+
 export function requireAdmin(req: Request, _res: Response, next: NextFunction) {
   if (!req.user) return next(unauthorized());
-  if (!req.user.roles.includes('admin')) return next(forbidden());
+  if (!req.user.permissions.length) return next(forbidden());
   return next();
 }

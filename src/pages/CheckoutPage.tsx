@@ -7,8 +7,8 @@ import { Card } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { PROPERTY } from '@/config/constants';
-import type { PaymentMethod, GuestInfo, BookingFormData, BookingCartItem, BookingQuote } from '@/types';
-import { createReservation, createStripeCheckoutSession, quoteAvailability } from '@/services/api';
+import type { PaymentMethod, GuestInfo, BookingFormData, BookingCartItem, BookingQuote, HotelPolicies } from '@/types';
+import { createReservation, createStripeCheckoutSession, getHotelPolicies, quoteAvailability } from '@/services/api';
 import { CreditCard, Loader2, ArrowLeft, Lock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -44,6 +44,7 @@ export default function CheckoutPage() {
   const [quote, setQuote] = useState<BookingQuote | null>(null);
   const [quoteLoading, setQuoteLoading] = useState(true);
   const [quoteError, setQuoteError] = useState('');
+  const [hotelPolicies, setHotelPolicies] = useState<HotelPolicies | null>(null);
   const [step, setStep] = useState<'details' | 'payment'>('details');
   const [guest, setGuest] = useState<GuestInfo>({ firstName: '', lastName: '', email: '', phone: '' });
   const [specialRequests, setSpecialRequests] = useState('');
@@ -51,6 +52,19 @@ export default function CheckoutPage() {
   const [agreed, setAgreed] = useState(false);
   const paymentMethod: PaymentMethod = 'stripe_pay_now';
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    getHotelPolicies()
+      .then(result => {
+        if (!cancelled) {
+          setHotelPolicies(result);
+          setArrivalTime(current => current === PROPERTY.checkIn ? result.checkInTime : current);
+        }
+      })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -171,7 +185,7 @@ export default function CheckoutPage() {
                 <div className="flex items-start gap-2">
                   <Checkbox id="agree" checked={agreed} onCheckedChange={c => setAgreed(c as boolean)} />
                   <Label htmlFor="agree" className="text-sm text-muted-foreground leading-snug cursor-pointer">
-                    I agree to the hotel policies, including check-in at {PROPERTY.checkIn} and check-out at {PROPERTY.checkOut}. I understand the cancellation policy.
+                    I agree to the hotel policies, including check-in at {hotelPolicies?.checkInTime ?? PROPERTY.checkIn} and check-out at {hotelPolicies?.checkOutTime ?? PROPERTY.checkOut}. I understand the cancellation policy.
                   </Label>
                 </div>
                 <Button

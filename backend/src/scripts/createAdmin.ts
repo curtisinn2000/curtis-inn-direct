@@ -23,9 +23,9 @@ async function main() {
     [email, hash, displayName],
   );
   await pool.query(
-    `insert into user_roles(user_id, role)
-     values ($1, 'admin')
-     on conflict (user_id, role) do nothing`,
+    `insert into user_roles(user_id, role, role_key)
+     values ($1, 'admin', 'owner')
+     on conflict (user_id, role_key) do nothing`,
     [user.rows[0].id],
   );
 

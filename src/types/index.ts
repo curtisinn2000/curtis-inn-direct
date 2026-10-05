@@ -202,6 +202,7 @@ export interface NearbyAttraction {
   distance: string;
   image: string;
   category: string;
+  sortOrder?: number;
 }
 
 export interface GalleryImage {
@@ -248,6 +249,68 @@ export interface Admin {
   email: string;
   name: string;
   role: 'owner' | 'manager' | 'staff';
+}
+
+export type AdminRoleKey = 'owner' | 'manager' | 'front_desk';
+
+export interface AdminSessionUser {
+  id: string;
+  email: string;
+  displayName: string;
+  roleKeys: AdminRoleKey[];
+  roleNames: string[];
+  permissions: string[];
+}
+
+export interface AdminAccount {
+  id: string;
+  email: string;
+  displayName: string;
+  roleKey: AdminRoleKey;
+  roleName: string;
+  isActive: boolean;
+  invitationPending: boolean;
+  lastLoginAt: string | null;
+  invitedAt: string | null;
+}
+
+export interface AdminRoleDefinition {
+  key: AdminRoleKey;
+  name: string;
+  description: string;
+  permissions: string[];
+}
+
+export interface HotelPolicies {
+  checkInTime: string;
+  checkOutTime: string;
+  minimumCheckInAge: number;
+  cancellationWindowHours: number;
+  cancellationRule: string;
+  noShowPolicy: string;
+  depositPolicy: string;
+  smokingPolicy: string;
+  petPolicy: string;
+  incidentalsPolicy: string;
+  acceptedPayments: string[];
+  earlyCheckInPolicy: string;
+  lateCheckoutPolicy: string;
+  guestFacingNotes: string;
+  updatedAt?: string;
+}
+
+export interface IntegrationStatus {
+  configured: boolean;
+  lastUpdatedAt: string | null;
+  lastTestStatus: 'success' | 'failed' | null;
+  lastTestedAt: string | null;
+  lastTestError: string | null;
+  fields: Record<string, string | number>;
+}
+
+export interface IntegrationSettings {
+  email: IntegrationStatus;
+  stripe: IntegrationStatus;
 }
 
 export interface AuditLog {

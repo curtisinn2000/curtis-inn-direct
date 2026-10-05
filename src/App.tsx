@@ -27,6 +27,9 @@ import AdminPaymentsPage from "./pages/admin/AdminPaymentsPage";
 import AdminContentPage from "./pages/admin/AdminContentPage";
 import AdminReportsPage from "./pages/admin/AdminReportsPage";
 import AdminSettingsPage from "./pages/admin/AdminSettingsPage";
+import AdminInvitationPage from "./pages/admin/AdminInvitationPage";
+import { RequireAdminPermission } from "./components/admin/RequireAdminPermission";
+import { ADMIN_PERMISSIONS } from "./config/adminPermissions";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -55,16 +58,17 @@ const App = () => (
 
           {/* Admin */}
           <Route path="/admin/login" element={<AdminLoginPage />} />
+          <Route path="/admin/invite/:token" element={<AdminInvitationPage />} />
           <Route path="/admin" element={<AdminLayout />}>
-            <Route index element={<AdminDashboard />} />
-            <Route path="reservations" element={<AdminReservationsPage />} />
-            <Route path="reservations/:id" element={<AdminReservationDetailPage />} />
-            <Route path="calendar" element={<AdminCalendarPage />} />
-            <Route path="rooms" element={<AdminRoomsPage />} />
-            <Route path="rates" element={<AdminRatesPage />} />
-            <Route path="payments" element={<AdminPaymentsPage />} />
-            <Route path="content" element={<AdminContentPage />} />
-            <Route path="reports" element={<AdminReportsPage />} />
+            <Route index element={<RequireAdminPermission permission={ADMIN_PERMISSIONS.dashboardRead}><AdminDashboard /></RequireAdminPermission>} />
+            <Route path="reservations" element={<RequireAdminPermission permission={ADMIN_PERMISSIONS.reservationsRead}><AdminReservationsPage /></RequireAdminPermission>} />
+            <Route path="reservations/:id" element={<RequireAdminPermission permission={ADMIN_PERMISSIONS.reservationsRead}><AdminReservationDetailPage /></RequireAdminPermission>} />
+            <Route path="calendar" element={<RequireAdminPermission permission={ADMIN_PERMISSIONS.availabilityRead}><AdminCalendarPage /></RequireAdminPermission>} />
+            <Route path="rooms" element={<RequireAdminPermission permission={ADMIN_PERMISSIONS.roomsRead}><AdminRoomsPage /></RequireAdminPermission>} />
+            <Route path="rates" element={<RequireAdminPermission permission={ADMIN_PERMISSIONS.ratesRead}><AdminRatesPage /></RequireAdminPermission>} />
+            <Route path="payments" element={<RequireAdminPermission permission={ADMIN_PERMISSIONS.paymentsRead}><AdminPaymentsPage /></RequireAdminPermission>} />
+            <Route path="content" element={<RequireAdminPermission permission={ADMIN_PERMISSIONS.contentRead}><AdminContentPage /></RequireAdminPermission>} />
+            <Route path="reports" element={<RequireAdminPermission permission={ADMIN_PERMISSIONS.reportsRead}><AdminReportsPage /></RequireAdminPermission>} />
             <Route path="settings" element={<AdminSettingsPage />} />
           </Route>
 

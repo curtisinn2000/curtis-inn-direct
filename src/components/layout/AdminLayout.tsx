@@ -6,18 +6,22 @@ import {
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { apiRequest, setAdminToken } from '@/services/client';
+import { setAdminToken } from '@/services/client';
+import { getAdminSession } from '@/services/api';
+import type { AdminSessionUser } from '@/types';
+import { AdminSessionProvider, hasAdminPermission } from '@/contexts/AdminSessionContext';
+import { ADMIN_PERMISSIONS } from '@/config/adminPermissions';
 
 const adminNav = [
-  { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
-  { label: 'Reservations', href: '/admin/reservations', icon: CalendarDays },
-  { label: 'Availability Center', href: '/admin/calendar', icon: CalendarDays },
-  { label: 'Rooms', href: '/admin/rooms', icon: BedDouble },
-  { label: 'Rates', href: '/admin/rates', icon: DollarSign },
-  { label: 'Payments', href: '/admin/payments', icon: CreditCard },
-  { label: 'Content', href: '/admin/content', icon: FileText },
-  { label: 'Reports', href: '/admin/reports', icon: BarChart3 },
-  { label: 'Settings', href: '/admin/settings', icon: Settings },
+  { label: 'Dashboard', href: '/admin', icon: LayoutDashboard, permission: ADMIN_PERMISSIONS.dashboardRead },
+  { label: 'Reservations', href: '/admin/reservations', icon: CalendarDays, permission: ADMIN_PERMISSIONS.reservationsRead },
+  { label: 'Availability Center', href: '/admin/calendar', icon: CalendarDays, permission: ADMIN_PERMISSIONS.availabilityRead },
+  { label: 'Rooms', href: '/admin/rooms', icon: BedDouble, permission: ADMIN_PERMISSIONS.roomsRead },
+  { label: 'Rates', href: '/admin/rates', icon: DollarSign, permission: ADMIN_PERMISSIONS.ratesRead },
+  { label: 'Payments', href: '/admin/payments', icon: CreditCard, permission: ADMIN_PERMISSIONS.paymentsRead },
+  { label: 'Content', href: '/admin/content', icon: FileText, permission: ADMIN_PERMISSIONS.contentRead },
+  { label: 'Reports', href: '/admin/reports', icon: BarChart3, permission: ADMIN_PERMISSIONS.reportsRead },
+  { label: 'Settings', href: '/admin/settings', icon: Settings, permission: ADMIN_PERMISSIONS.profileManage },
 ];
 
 export function AdminLayout() {
@@ -25,11 +29,22 @@ export function AdminLayout() {
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
+  const [user, setUser] = useState<AdminSessionUser | null>(null);
+
+  const refreshSession = async () => {
+    const result = await getAdminSession();
+    setUser(result.user);
+  };
 
   useEffect(() => {
     let cancelled = false;
-    apiRequest('/auth/me')
-      .then(() => { if (!cancelled) setCheckingAuth(false); })
+    getAdminSession()
+      .then(result => {
+        if (!cancelled) {
+          setUser(result.user);
+          setCheckingAuth(false);
+        }
+      })
       .catch(() => {
         if (!cancelled) {
           setAdminToken(null);
@@ -59,7 +74,7 @@ export function AdminLayout() {
       </div>
 
       <div className="flex-1 p-3 space-y-0.5 overflow-y-auto">
-        {adminNav.map(item => (
+        {adminNav.filter(item => user && hasAdminPermission(user, item.permission)).map(item => (
           <Link
             key={item.href}
             to={item.href}
@@ -89,7 +104,7 @@ export function AdminLayout() {
     </nav>
   );
 
-  if (checkingAuth) {
+  if (checkingAuth || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-muted/30 text-sm text-muted-foreground">
         Checking admin session...
@@ -98,6 +113,7 @@ export function AdminLayout() {
   }
 
   return (
+    <AdminSessionProvider value={{ user, refresh: refreshSession }}>
     <div className="min-h-screen flex bg-muted/30">
       {sidebarOpen && (
         <div className="fixed inset-0 z-40 bg-foreground/50 lg:hidden" onClick={() => setSidebarOpen(false)} />
@@ -121,12 +137,16 @@ export function AdminLayout() {
             <Menu className="h-5 w-5" />
           </Button>
           <div className="flex-1" />
-          <span className="text-sm text-muted-foreground">Front Desk</span>
+          <div className="text-right leading-tight">
+            <p className="text-sm font-medium">{user.displayName}</p>
+            <p className="text-xs text-muted-foreground">{user.roleNames.join(', ')}</p>
+          </div>
         </header>
         <div className="admin-page">
           <Outlet />
         </div>
       </div>
     </div>
+    </AdminSessionProvider>
   );
 }

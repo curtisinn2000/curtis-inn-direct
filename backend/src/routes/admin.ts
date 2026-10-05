@@ -2,7 +2,9 @@ import { Router } from 'express';
 import multer from 'multer';
 import { z } from 'zod';
 import { pool, withTransaction } from '../db.js';
-import { asyncHandler, requireAdmin, requireAuth } from '../middleware.js';
+import { asyncHandler, requireAuth } from '../middleware.js';
+import { permissions, requirePermission } from '../access.js';
+import { settingsRouter } from './settings.js';
 import {
   bulkInventorySchema,
   bulkRatesSchema,
@@ -38,7 +40,14 @@ import { uploadContentImage, validateContentImage } from '../services/uploads.js
 
 export const adminRouter = Router();
 
-adminRouter.use(requireAuth, requireAdmin);
+adminRouter.use(requireAuth);
+adminRouter.use('/settings', settingsRouter);
+adminRouter.use('/dashboard', requirePermission(permissions.dashboardRead));
+adminRouter.use('/calendar', requirePermission(permissions.availabilityRead));
+adminRouter.use('/inventory', requirePermission(permissions.availabilityManage));
+adminRouter.use('/rates', requirePermission(permissions.ratesManage));
+adminRouter.use('/payments', requirePermission(permissions.paymentsRead));
+adminRouter.use('/audit-log', requirePermission(permissions.auditRead));
 
 const calendarQuerySchema = z.object({
   start: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
@@ -98,11 +107,11 @@ adminRouter.get('/dashboard', asyncHandler(async (_req, res) => {
   });
 }));
 
-adminRouter.get('/content', asyncHandler(async (_req, res) => {
+adminRouter.get('/content', requirePermission(permissions.contentRead), asyncHandler(async (_req, res) => {
   res.json(await getWebsiteContent(pool, { admin: true }));
 }));
 
-adminRouter.get('/content/room-options', asyncHandler(async (_req, res) => {
+adminRouter.get('/content/room-options', requirePermission(permissions.contentRead), asyncHandler(async (_req, res) => {
   const [amenities, policies] = await Promise.all([
     pool.query(`select * from room_amenity_options where is_active = true order by sort_order, label`),
     pool.query(`select * from room_policy_options where is_active = true order by sort_order, label`),
@@ -113,7 +122,7 @@ adminRouter.get('/content/room-options', asyncHandler(async (_req, res) => {
   });
 }));
 
-adminRouter.put('/content/hero', asyncHandler(async (req, res) => {
+adminRouter.put('/content/hero', requirePermission(permissions.contentManage), asyncHandler(async (req, res) => {
   const input = heroContentSchema.parse(req.body);
   await withTransaction(async client => {
     for (const [key, value] of Object.entries(input)) {
@@ -130,7 +139,7 @@ adminRouter.put('/content/hero', asyncHandler(async (req, res) => {
   res.json((await getWebsiteContent(pool, { admin: true })).hero);
 }));
 
-adminRouter.post('/content/uploads', contentImageUpload.single('image'), asyncHandler(async (req, res) => {
+adminRouter.post('/content/uploads', requirePermission(permissions.contentManage), contentImageUpload.single('image'), asyncHandler(async (req, res) => {
   validateContentImage(req.file);
   const uploaded = await uploadContentImage(req.file);
   await audit(pool, {
@@ -143,7 +152,7 @@ adminRouter.post('/content/uploads', contentImageUpload.single('image'), asyncHa
   res.status(201).json(uploaded);
 }));
 
-adminRouter.post('/content/faqs', asyncHandler(async (req, res) => {
+adminRouter.post('/content/faqs', requirePermission(permissions.contentManage), asyncHandler(async (req, res) => {
   const input = faqWriteSchema.parse(req.body);
   const result = await pool.query(
     `insert into website_faqs(question, answer, category, sort_order, updated_by)
@@ -155,7 +164,7 @@ adminRouter.post('/content/faqs', asyncHandler(async (req, res) => {
   res.status(201).json(faqFromRow(result.rows[0]));
 }));
 
-adminRouter.delete('/content/faqs/:id', asyncHandler(async (req, res) => {
+adminRouter.delete('/content/faqs/:id', requirePermission(permissions.contentManage), asyncHandler(async (req, res) => {
   const id = z.string().uuid().parse(req.params.id);
   const result = await pool.query(`delete from website_faqs where id = $1 returning *`, [id]);
   if (!result.rowCount) throw notFound('faq_not_found', 'FAQ item was not found.');
@@ -163,7 +172,7 @@ adminRouter.delete('/content/faqs/:id', asyncHandler(async (req, res) => {
   res.json({ ok: true });
 }));
 
-adminRouter.post('/content/gallery', asyncHandler(async (req, res) => {
+adminRouter.post('/content/gallery', requirePermission(permissions.contentManage), asyncHandler(async (req, res) => {
   const input = galleryWriteSchema.parse(req.body);
   const result = await pool.query(
     `insert into website_gallery_images(url, alt, category, sort_order, updated_by)
@@ -175,7 +184,7 @@ adminRouter.post('/content/gallery', asyncHandler(async (req, res) => {
   res.status(201).json(galleryImageFromRow(result.rows[0]));
 }));
 
-adminRouter.delete('/content/gallery/:id', asyncHandler(async (req, res) => {
+adminRouter.delete('/content/gallery/:id', requirePermission(permissions.contentManage), asyncHandler(async (req, res) => {
   const id = z.string().uuid().parse(req.params.id);
   const result = await pool.query(`delete from website_gallery_images where id = $1 returning *`, [id]);
   if (!result.rowCount) throw notFound('gallery_image_not_found', 'Gallery image was not found.');
@@ -183,7 +192,7 @@ adminRouter.delete('/content/gallery/:id', asyncHandler(async (req, res) => {
   res.json({ ok: true });
 }));
 
-adminRouter.post('/content/reviews', asyncHandler(async (req, res) => {
+adminRouter.post('/content/reviews', requirePermission(permissions.contentManage), asyncHandler(async (req, res) => {
   const input = reviewWriteSchema.parse(req.body);
   const result = await pool.query(
     `insert into website_reviews(guest_name, rating, comment, review_date, source, is_featured, sort_order, updated_by)
@@ -195,7 +204,7 @@ adminRouter.post('/content/reviews', asyncHandler(async (req, res) => {
   res.status(201).json(reviewFromRow(result.rows[0]));
 }));
 
-adminRouter.delete('/content/reviews/:id', asyncHandler(async (req, res) => {
+adminRouter.delete('/content/reviews/:id', requirePermission(permissions.contentManage), asyncHandler(async (req, res) => {
   const id = z.string().uuid().parse(req.params.id);
   const result = await pool.query(`delete from website_reviews where id = $1 returning *`, [id]);
   if (!result.rowCount) throw notFound('review_not_found', 'Review was not found.');
@@ -203,7 +212,7 @@ adminRouter.delete('/content/reviews/:id', asyncHandler(async (req, res) => {
   res.json({ ok: true });
 }));
 
-adminRouter.post('/content/attractions', asyncHandler(async (req, res) => {
+adminRouter.post('/content/attractions', requirePermission(permissions.contentManage), asyncHandler(async (req, res) => {
   const input = attractionWriteSchema.parse(req.body);
   const result = await pool.query(
     `insert into website_attractions(name, description, distance, image, category, sort_order, updated_by)
@@ -215,7 +224,7 @@ adminRouter.post('/content/attractions', asyncHandler(async (req, res) => {
   res.status(201).json(attractionFromRow(result.rows[0]));
 }));
 
-adminRouter.delete('/content/attractions/:id', asyncHandler(async (req, res) => {
+adminRouter.delete('/content/attractions/:id', requirePermission(permissions.contentManage), asyncHandler(async (req, res) => {
   const id = z.string().uuid().parse(req.params.id);
   const result = await pool.query(`delete from website_attractions where id = $1 returning *`, [id]);
   if (!result.rowCount) throw notFound('attraction_not_found', 'Attraction was not found.');
@@ -223,7 +232,7 @@ adminRouter.delete('/content/attractions/:id', asyncHandler(async (req, res) => 
   res.json({ ok: true });
 }));
 
-adminRouter.post('/content/amenities', asyncHandler(async (req, res) => {
+adminRouter.post('/content/amenities', requirePermission(permissions.contentManage), asyncHandler(async (req, res) => {
   const input = roomOptionWriteSchema.parse(req.body);
   const result = await pool.query(
     `insert into room_amenity_options(label, sort_order, updated_by)
@@ -237,7 +246,7 @@ adminRouter.post('/content/amenities', asyncHandler(async (req, res) => {
   res.status(201).json(roomOptionFromRow(result.rows[0]));
 }));
 
-adminRouter.delete('/content/amenities/:id', asyncHandler(async (req, res) => {
+adminRouter.delete('/content/amenities/:id', requirePermission(permissions.contentManage), asyncHandler(async (req, res) => {
   const id = z.string().uuid().parse(req.params.id);
   const result = await pool.query(
     `update room_amenity_options set is_active = false, updated_by = $2, updated_at = now()
@@ -250,7 +259,7 @@ adminRouter.delete('/content/amenities/:id', asyncHandler(async (req, res) => {
   res.json({ ok: true });
 }));
 
-adminRouter.post('/content/policies', asyncHandler(async (req, res) => {
+adminRouter.post('/content/policies', requirePermission(permissions.contentManage), asyncHandler(async (req, res) => {
   const input = roomOptionWriteSchema.parse(req.body);
   const result = await pool.query(
     `insert into room_policy_options(label, sort_order, updated_by)
@@ -264,7 +273,7 @@ adminRouter.post('/content/policies', asyncHandler(async (req, res) => {
   res.status(201).json(roomOptionFromRow(result.rows[0]));
 }));
 
-adminRouter.delete('/content/policies/:id', asyncHandler(async (req, res) => {
+adminRouter.delete('/content/policies/:id', requirePermission(permissions.contentManage), asyncHandler(async (req, res) => {
   const id = z.string().uuid().parse(req.params.id);
   const result = await pool.query(
     `update room_policy_options set is_active = false, updated_by = $2, updated_at = now()
@@ -277,7 +286,7 @@ adminRouter.delete('/content/policies/:id', asyncHandler(async (req, res) => {
   res.json({ ok: true });
 }));
 
-adminRouter.get('/rooms', asyncHandler(async (_req, res) => {
+adminRouter.get('/rooms', requirePermission(permissions.roomsRead), asyncHandler(async (_req, res) => {
   const result = await pool.query(
     `select *, $1::numeric as tax_rate
      from room_types
@@ -353,7 +362,7 @@ adminRouter.get('/calendar', asyncHandler(async (req, res) => {
   res.json({ start, dates, rooms, occupancy });
 }));
 
-adminRouter.post('/rooms', asyncHandler(async (req, res) => {
+adminRouter.post('/rooms', requirePermission(permissions.roomsManage), asyncHandler(async (req, res) => {
   const input = roomWriteSchema.parse(req.body);
   const slug = input.slug ?? slugify(input.name);
   const result = await pool.query(
@@ -372,7 +381,7 @@ adminRouter.post('/rooms', asyncHandler(async (req, res) => {
   res.status(201).json(roomFromRow(result.rows[0]));
 }));
 
-adminRouter.put('/rooms/:id', asyncHandler(async (req, res) => {
+adminRouter.put('/rooms/:id', requirePermission(permissions.roomsManage), asyncHandler(async (req, res) => {
   const roomId = z.string().uuid().parse(req.params.id);
   const input = roomWriteSchema.parse(req.body);
   const result = await pool.query(
@@ -395,7 +404,7 @@ adminRouter.put('/rooms/:id', asyncHandler(async (req, res) => {
   res.json(roomFromRow(result.rows[0]));
 }));
 
-adminRouter.delete('/rooms/:id', asyncHandler(async (req, res) => {
+adminRouter.delete('/rooms/:id', requirePermission(permissions.roomsManage), asyncHandler(async (req, res) => {
   const roomId = z.string().uuid().parse(req.params.id);
   const before = await pool.query(`select * from room_types where id = $1 and deleted_at is null`, [roomId]);
   if (!before.rowCount) throw notFound('room_not_found', 'Room type was not found.');
@@ -526,7 +535,7 @@ adminRouter.delete('/rates/:roomId', asyncHandler(async (req, res) => {
   res.json({ ok: true });
 }));
 
-adminRouter.get('/reservations', asyncHandler(async (_req, res) => {
+adminRouter.get('/reservations', requirePermission(permissions.reservationsRead), asyncHandler(async (_req, res) => {
   const result = await pool.query(
     `select r.*, rt.name as room_type_name,
        coalesce(lines.room_lines, '[]'::json) as room_lines
@@ -549,7 +558,7 @@ adminRouter.get('/reservations', asyncHandler(async (_req, res) => {
   res.json(result.rows.map(reservationFromRow));
 }));
 
-adminRouter.get('/reservations/:id', asyncHandler(async (req, res) => {
+adminRouter.get('/reservations/:id', requirePermission(permissions.reservationsRead), asyncHandler(async (req, res) => {
   const result = await pool.query(
     `select r.*, rt.name as room_type_name,
        coalesce(lines.room_lines, '[]'::json) as room_lines
@@ -574,7 +583,7 @@ adminRouter.get('/reservations/:id', asyncHandler(async (req, res) => {
   res.json(reservationFromRow(result.rows[0]));
 }));
 
-adminRouter.patch('/reservations/:id/status', asyncHandler(async (req, res) => {
+adminRouter.patch('/reservations/:id/status', requirePermission(permissions.reservationsManage), asyncHandler(async (req, res) => {
   const input = statusUpdateSchema.parse(req.body);
   const result = await pool.query(
     `with updated as (

@@ -41,7 +41,7 @@ export const MOCK_ATTRACTIONS: NearbyAttraction[] = [
 
 export const MOCK_RESERVATIONS: Reservation[] = [
   {
-    id: 'res-001', confirmationNumber: 'CIS-20260712-0000001', roomTypeId: 'king-room', roomTypeName: 'King Room',
+    id: 'res-001', confirmationNumber: 'CIS-20260712-0000001', roomTypeId: 'king-room', roomTypeName: 'King Room', roomTypeSummary: '1 x King Room', roomLines: [],
     checkIn: '2024-12-20', checkOut: '2024-12-23', nights: 3, guests: 2, rooms: 1,
     guest: { firstName: 'John', lastName: 'Anderson', email: 'curtisinn200@gmail.com', phone: '(305) 555-1234' },
     specialRequests: 'Late check-in around 9 PM', arrivalTime: '9:00 PM',
@@ -51,7 +51,7 @@ export const MOCK_RESERVATIONS: Reservation[] = [
     createdAt: '2024-12-10T14:30:00Z', updatedAt: '2024-12-10T14:30:00Z',
   },
   {
-    id: 'res-002', confirmationNumber: 'CIS-20260712-0000002', roomTypeId: 'two-bedroom-suite', roomTypeName: 'Two-Bedroom Suite',
+    id: 'res-002', confirmationNumber: 'CIS-20260712-0000002', roomTypeId: 'two-bedroom-suite', roomTypeName: 'Two-Bedroom Suite', roomTypeSummary: '1 x Two-Bedroom Suite', roomLines: [],
     checkIn: '2024-12-21', checkOut: '2024-12-26', nights: 5, guests: 5, rooms: 1,
     guest: { firstName: 'Sarah', lastName: 'Williams', email: 'curtisinn200@gmail.com', phone: '(954) 555-5678' },
     specialRequests: 'Extra towels please', arrivalTime: '4:00 PM',
@@ -61,7 +61,7 @@ export const MOCK_RESERVATIONS: Reservation[] = [
     createdAt: '2024-12-12T09:15:00Z', updatedAt: '2024-12-12T09:15:00Z',
   },
   {
-    id: 'res-003', confirmationNumber: 'CIS-20260712-0000003', roomTypeId: 'standard-room', roomTypeName: 'Standard Room',
+    id: 'res-003', confirmationNumber: 'CIS-20260712-0000003', roomTypeId: 'standard-room', roomTypeName: 'Standard Room', roomTypeSummary: '1 x Standard Room', roomLines: [],
     checkIn: '2024-12-22', checkOut: '2024-12-24', nights: 2, guests: 1, rooms: 1,
     guest: { firstName: 'Michael', lastName: 'Chen', email: 'curtisinn200@gmail.com', phone: '(786) 555-9012' },
     specialRequests: '', arrivalTime: '3:00 PM',
