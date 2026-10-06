@@ -16,6 +16,11 @@ export function dateFromKey(dateKey: string): Date {
   return new Date(year, month - 1, day);
 }
 
+export function dateKey(date: Date | string): string {
+  if (typeof date === 'string') return date;
+  return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, '0'), String(date.getDate()).padStart(2, '0')].join('-');
+}
+
 export function addDaysKey(dateKey: string, days: number): string {
   const date = dateFromKey(dateKey);
   date.setDate(date.getDate() + days);

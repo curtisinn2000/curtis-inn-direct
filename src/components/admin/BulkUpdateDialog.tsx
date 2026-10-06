@@ -12,7 +12,7 @@ import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Check, Pencil, AlertTriangle, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { dateKey } from '@/store/inventoryStore';
+import { dateKey } from '@/lib/bookingDates';
 import { useToast } from '@/hooks/use-toast';
 import type { RoomType } from '@/types';
 
@@ -74,7 +74,7 @@ export function BulkUpdateDialog({ open, onOpenChange, rooms, onSubmit }: Props)
     const n = Number(value);
     if (!Number.isFinite(n) || n < 0) return 'Must be 0 or more';
     const base = rooms.find(room => room.id === roomId)?.inventoryCount ?? 0;
-    if (n > base) return `Max ${base} (set in Rooms)`;
+    if (n > base) return `Max ${base} (set in Room Types)`;
     return null;
   };
 

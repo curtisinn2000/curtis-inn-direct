@@ -8,6 +8,7 @@ const asBoolean = (value: unknown) => Boolean(value);
 const asArray = <T>(value: unknown, fallback: T[] = []) => Array.isArray(value) ? value as T[] : fallback;
 
 export function roomFromRow(row: DbRow) {
+  const bedrooms = asArray<{ name: string; beds: { type: string; quantity: number; customLabel?: string }[] }>(row.bedrooms);
   return {
     id: asString(row.id),
     slug: asString(row.slug),
@@ -15,7 +16,23 @@ export function roomFromRow(row: DbRow) {
     shortDescription: asString(row.short_description),
     longDescription: asString(row.long_description),
     occupancy: asNumber(row.occupancy),
+    maxGuests: asNumber(row.occupancy),
+    maxAdults: asNumber(row.max_adults ?? row.occupancy),
+    maxChildren: asNumber(row.max_children ?? row.occupancy),
     bedType: asString(row.bed_type),
+    bedSummary: asString(row.bed_type),
+    bedrooms,
+    category: asString(row.category || 'room'),
+    standardName: asString(row.standard_name || 'Other'),
+    customName: row.custom_name == null ? null : asString(row.custom_name),
+    extraBedsAllowed: asBoolean(row.extra_beds_allowed),
+    maxExtraBeds: asNumber(row.max_extra_beds),
+    extraBedTypes: asArray<string>(row.extra_bed_types),
+    roomSizeSqFt: row.room_size_sq_ft == null ? null : asNumber(row.room_size_sq_ft),
+    smokingDesignation: asString(row.smoking_designation || 'unspecified'),
+    bathroomType: asString(row.bathroom_type || 'unspecified'),
+    bathroomFeatures: asArray<string>(row.bathroom_features),
+    viewTypes: asArray<string>(row.view_types),
     images: asArray<string>(row.images),
     amenities: asArray<string>(row.amenities),
     policies: asArray<string>(row.policies),
@@ -23,7 +40,7 @@ export function roomFromRow(row: DbRow) {
     taxRate: asNumber(row.tax_rate ?? 0.13),
     isActive: asBoolean(row.is_active),
     inventoryCount: asNumber(row.base_inventory),
-    cancellationTerms: asString(row.cancellation_terms),
+    cancellationTerms: row.cancellation_terms == null ? null : asString(row.cancellation_terms),
     sortOrder: asNumber(row.sort_order),
   };
 }
@@ -58,6 +75,8 @@ export function reservationFromRow(row: DbRow) {
     checkOut: row.check_out instanceof Date ? row.check_out.toISOString().slice(0, 10) : asString(row.check_out),
     nights: asNumber(row.nights),
     guests: asNumber(row.guests),
+    adults: asNumber(row.adults ?? row.guests),
+    children: asNumber(row.children),
     rooms: asNumber(row.rooms),
     guest: {
       firstName: asString(row.guest_first_name),

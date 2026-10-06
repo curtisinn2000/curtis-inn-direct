@@ -12,6 +12,7 @@ import type {
   PromoCode,
   AuditLog,
   AdminCalendarResponse,
+  AdminCalendarDay,
   InventoryStatus,
   FAQ,
   GalleryImage,
@@ -30,19 +31,30 @@ import type {
 import { apiRequest, jsonBody } from './client';
 
 export interface RoomTypeWritePayload {
-  name: string;
+  category: RoomType['category'];
+  standardName: string;
+  customName?: string | null;
   slug?: string;
   shortDescription: string;
   longDescription: string;
-  occupancy: number;
-  bedType: string;
+  maxGuests: number;
+  maxAdults: number;
+  maxChildren: number;
+  bedrooms: RoomType['bedrooms'];
   baseInventory: number;
-  basePrice: number;
   isActive: boolean;
+  extraBedsAllowed: boolean;
+  maxExtraBeds: number;
+  extraBedTypes: string[];
+  roomSizeSqFt?: number | null;
+  smokingDesignation: RoomType['smokingDesignation'];
+  bathroomType: RoomType['bathroomType'];
+  bathroomFeatures: string[];
+  viewTypes: string[];
   images: string[];
   amenities?: string[];
   policies?: string[];
-  cancellationTerms?: string;
+  cancellationTerms?: string | null;
   sortOrder?: number;
 }
 
@@ -122,6 +134,12 @@ export async function uploadContentImage(file: File): Promise<ContentImageUpload
   });
 }
 
+export async function uploadRoomImage(file: File): Promise<ContentImageUploadResult> {
+  const formData = new FormData();
+  formData.append('image', file);
+  return apiRequest<ContentImageUploadResult>('/admin/rooms/uploads', { method: 'POST', body: formData });
+}
+
 export async function deleteGalleryImage(id: string): Promise<{ ok: true }> {
   return apiRequest<{ ok: true }>(`/admin/content/gallery/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
@@ -166,6 +184,10 @@ export async function getAdminRoomTypes(): Promise<RoomType[]> {
   return apiRequest<RoomType[]>('/admin/rooms');
 }
 
+export async function getRoomTypeOptions(): Promise<RoomOptionsCatalog> {
+  return apiRequest<RoomOptionsCatalog>('/admin/rooms/options');
+}
+
 export async function createAdminRoomType(data: RoomTypeWritePayload): Promise<RoomType> {
   return apiRequest<RoomType>('/admin/rooms', jsonBody(data));
 }
@@ -204,6 +226,10 @@ export async function setRoomRate(roomId: string, date: string, rate: number): P
   return apiRequest<{ ok: true }>('/admin/rates/set', jsonBody({ roomId, date, rate }));
 }
 
+export async function setDefaultRoomRate(roomId: string, rate: number): Promise<RoomType> {
+  return apiRequest<RoomType>('/admin/rates/default', { method: 'PUT', body: JSON.stringify({ roomId, rate }) });
+}
+
 export async function bulkUpdateRates(roomId: string, dates: string[], rate: number): Promise<{ ok: true }> {
   return apiRequest<{ ok: true }>('/admin/rates/bulk', jsonBody({
     roomId,
@@ -233,6 +259,15 @@ export async function bulkUpdateInventory(
   patch: { inventory?: number; status?: InventoryStatus },
 ): Promise<{ ok: true }> {
   return apiRequest<{ ok: true }>('/admin/inventory/bulk', jsonBody({ roomId, dates, patch }));
+}
+
+export async function setInventoryStatus(input: {
+  roomId: string;
+  date: string;
+  status: InventoryStatus;
+  expectedUpdatedAt?: string | null;
+}): Promise<AdminCalendarDay> {
+  return apiRequest<AdminCalendarDay>('/admin/inventory/status', { method: 'PATCH', body: JSON.stringify(input) });
 }
 
 export async function getReservationById(id: string): Promise<Reservation | null> {

@@ -17,6 +17,8 @@ import {
   reviewWriteSchema,
   roomOptionWriteSchema,
   roomWriteSchema,
+  inventoryStatusWriteSchema,
+  defaultRateWriteSchema,
   statusUpdateSchema,
 } from '../schemas.js';
 import {
@@ -37,6 +39,8 @@ import { config } from '../config.js';
 import { addDaysKey, hotelTodayKey } from '../date-utils.js';
 import { getWebsiteContent } from '../services/content.js';
 import { uploadContentImage, validateContentImage } from '../services/uploads.js';
+import { getAdminCalendarData, setInventoryStatus } from '../services/adminCalendar.js';
+import { assertPublishableRoom, bedSummary, normalizeRoomWrite, publicRoomName, validateBaseInventoryChange } from '../services/roomTypes.js';
 
 export const adminRouter = Router();
 
@@ -55,7 +59,6 @@ const calendarQuerySchema = z.object({
   roomId: z.union([z.literal('all'), z.string().uuid()]).default('all'),
 });
 
-const ACTIVE_HOLD_STATUSES = ['pending', 'confirmed', 'checked_in'];
 const contentImageUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024, files: 1 },
@@ -297,84 +300,55 @@ adminRouter.get('/rooms', requirePermission(permissions.roomsRead), asyncHandler
   res.json(result.rows.map(roomFromRow));
 }));
 
+adminRouter.get('/rooms/options', requirePermission(permissions.roomsRead), asyncHandler(async (_req, res) => {
+  const [amenities, policies] = await Promise.all([
+    pool.query(`select * from room_amenity_options where is_active = true order by sort_order, label`),
+    pool.query(`select * from room_policy_options where is_active = true order by sort_order, label`),
+  ]);
+  res.json({ amenities: amenities.rows.map(roomOptionFromRow), policies: policies.rows.map(roomOptionFromRow) });
+}));
+
+adminRouter.post('/rooms/uploads', requirePermission(permissions.roomsManage), contentImageUpload.single('image'), asyncHandler(async (req, res) => {
+  if (!req.file) throw badRequest('image_required', 'Choose an image to upload.');
+  res.status(201).json(await uploadContentImage(req.file));
+}));
+
 adminRouter.get('/calendar', asyncHandler(async (req, res) => {
   const input = calendarQuerySchema.parse(req.query);
   const start = input.start ?? hotelTodayKey();
   const dates = Array.from({ length: input.days }, (_, index) => addDaysKey(start, index));
-  const roomParams = input.roomId === 'all' ? [] : [input.roomId];
-  const roomsResult = await pool.query(
-    `select *, $1::numeric as tax_rate
-     from room_types
-     where is_active = true
-       and deleted_at is null
-       and ($2::uuid is null or id = $2::uuid)
-     order by sort_order, name`,
-    [config.TAX_RATE, roomParams[0] ?? null],
-  );
-
-  const rooms = [];
-  const occupancy = dates.map(date => ({ date, booked: 0, total: 0, pct: 0 }));
-
-  for (const row of roomsResult.rows) {
-    const days = [];
-    for (const date of dates) {
-      const dayResult = await pool.query(
-        `select
-           coalesce(io.inventory, $2)::int as inventory,
-           coalesce(io.status, 'open')::text as status,
-           coalesce(ro.rate, round($3::numeric * case when extract(dow from $4::date) in (0,6) then 1.10 else 1.00 end)::int)::int as rate,
-           coalesce(sum(rn.rooms) filter (where r.status = any($5::reservation_status[])), 0)::int as booked
-         from (select $1::uuid as room_type_id, $4::date as stay_date) d
-         left join inventory_overrides io on io.room_type_id = d.room_type_id and io.stay_date = d.stay_date
-         left join rate_overrides ro on ro.room_type_id = d.room_type_id and ro.stay_date = d.stay_date
-         left join reservation_nights rn on rn.room_type_id = d.room_type_id and rn.stay_date = d.stay_date
-         left join reservations r on r.id = rn.reservation_id
-         group by io.inventory, io.status, ro.rate`,
-        [row.id, row.base_inventory, row.base_price, date, ACTIVE_HOLD_STATUSES],
-      );
-      const day = dayResult.rows[0];
-      const inventory = Number(day.inventory);
-      const booked = Number(day.booked);
-      const status = String(day.status) as 'open' | 'closed';
-      const remaining = status === 'closed' ? 0 : Math.max(0, inventory - booked);
-      const occupancyDay = occupancy.find(item => item.date === date)!;
-      occupancyDay.booked += booked;
-      occupancyDay.total += status === 'closed' ? 0 : inventory;
-      days.push({
-        date,
-        inventory,
-        booked,
-        remaining,
-        status,
-        rate: Number(day.rate),
-      });
-    }
-    rooms.push({
-      roomType: roomFromRow(row),
-      days,
-    });
-  }
-
-  for (const day of occupancy) {
-    day.pct = day.total ? day.booked / day.total : 0;
-  }
-
-  res.json({ start, dates, rooms, occupancy });
+  const data = await getAdminCalendarData(pool, dates, input.roomId === 'all' ? null : input.roomId, config.TAX_RATE);
+  res.json({ start, dates, ...data });
 }));
 
 adminRouter.post('/rooms', requirePermission(permissions.roomsManage), asyncHandler(async (req, res) => {
   const input = roomWriteSchema.parse(req.body);
-  const slug = input.slug ?? slugify(input.name);
+  const data = normalizeRoomWrite(input);
+  const name = publicRoomName({
+    customName: typeof data.customName === 'string' ? data.customName : null,
+    standardName: String(data.standardName),
+    name: input.name,
+  });
+  const summary = bedSummary(data.bedrooms);
+  const basePrice = input.basePrice ?? 0;
+  assertPublishableRoom({ ...input, isActive: input.isActive, basePrice, baseInventory: input.baseInventory, bedrooms: data.bedrooms });
+  const slug = input.slug ?? slugify(name);
   const result = await pool.query(
     `insert into room_types (
       slug, name, short_description, long_description, occupancy, bed_type, base_inventory,
-      base_price, is_active, images, amenities, policies, cancellation_terms, sort_order
-     ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
-     returning *, $15::numeric as tax_rate`,
+      base_price, is_active, images, amenities, policies, cancellation_terms, sort_order,
+      category, standard_name, custom_name, bedrooms, max_adults, max_children,
+      extra_beds_allowed, max_extra_beds, extra_bed_types, room_size_sq_ft,
+      smoking_designation, bathroom_type, bathroom_features, view_types
+     ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28)
+     returning *, $29::numeric as tax_rate`,
     [
-      slug, input.name, input.shortDescription, input.longDescription, input.occupancy, input.bedType,
-      input.baseInventory, input.basePrice, input.isActive, input.images, input.amenities ?? null,
-      input.policies ?? null, input.cancellationTerms ?? null, input.sortOrder, config.TAX_RATE,
+      slug, name, input.shortDescription, input.longDescription, data.maxGuests, summary,
+      input.baseInventory, basePrice, input.isActive, input.images, input.amenities ?? [],
+      input.policies ?? [], input.cancellationTerms ?? null, input.sortOrder,
+      data.category, data.standardName, data.customName ?? null, JSON.stringify(data.bedrooms), data.maxAdults, data.maxChildren,
+      data.extraBedsAllowed, data.maxExtraBeds, data.extraBedTypes, data.roomSizeSqFt ?? null,
+      data.smokingDesignation, data.bathroomType, data.bathroomFeatures, data.viewTypes, config.TAX_RATE,
     ],
   );
   await audit(pool, { actorId: req.user!.id, entity: 'room_type', entityId: result.rows[0].id, action: 'create', after: input });
@@ -384,24 +358,43 @@ adminRouter.post('/rooms', requirePermission(permissions.roomsManage), asyncHand
 adminRouter.put('/rooms/:id', requirePermission(permissions.roomsManage), asyncHandler(async (req, res) => {
   const roomId = z.string().uuid().parse(req.params.id);
   const input = roomWriteSchema.parse(req.body);
-  const result = await pool.query(
+  const result = await withTransaction(async client => {
+    const current = await client.query(`select * from room_types where id = $1 and deleted_at is null for update`, [roomId]);
+    if (!current.rowCount) throw notFound('room_not_found', 'Room type was not found.');
+    if (input.baseInventory !== Number(current.rows[0].base_inventory)) await validateBaseInventoryChange(client, roomId, input.baseInventory);
+    const data = normalizeRoomWrite(input, current.rows[0]);
+    const name = publicRoomName({
+      customName: typeof data.customName === 'string' ? data.customName : null,
+      standardName: String(data.standardName),
+      name: input.name,
+    });
+    const summary = bedSummary(data.bedrooms);
+    const basePrice = input.basePrice ?? Number(current.rows[0].base_price);
+    assertPublishableRoom({ ...input, isActive: input.isActive, basePrice, baseInventory: input.baseInventory, bedrooms: data.bedrooms });
+    const updated = await client.query(
     `update room_types set
       name=$2, short_description=$3, long_description=$4, occupancy=$5, bed_type=$6,
-      base_inventory=$7, base_price=$8, is_active=$9, images=$10,
-      amenities=coalesce($11, amenities), policies=coalesce($12, policies),
-      cancellation_terms=coalesce($13, cancellation_terms), sort_order=$14, updated_at=now()
+      base_inventory=$7, is_active=$8, images=$9, amenities=$10, policies=$11,
+      cancellation_terms=$12, sort_order=$13, category=$14, standard_name=$15, custom_name=$16,
+      bedrooms=$17, max_adults=$18, max_children=$19, extra_beds_allowed=$20,
+      max_extra_beds=$21, extra_bed_types=$22, room_size_sq_ft=$23,
+      smoking_designation=$24, bathroom_type=$25, bathroom_features=$26, view_types=$27, updated_at=now()
      where id=$1
        and deleted_at is null
-     returning *, $15::numeric as tax_rate`,
+     returning *, $28::numeric as tax_rate`,
     [
-      roomId, input.name, input.shortDescription, input.longDescription, input.occupancy, input.bedType,
-      input.baseInventory, input.basePrice, input.isActive, input.images, input.amenities ?? null,
-      input.policies ?? null, input.cancellationTerms ?? null, input.sortOrder, config.TAX_RATE,
-    ],
-  );
-  if (!result.rowCount) throw notFound('room_not_found', 'Room type was not found.');
-  await audit(pool, { actorId: req.user!.id, entity: 'room_type', entityId: roomId, action: 'update', after: input });
-  res.json(roomFromRow(result.rows[0]));
+      roomId, name, input.shortDescription, input.longDescription, data.maxGuests, summary,
+      input.baseInventory, input.isActive, input.images, input.amenities ?? [], input.policies ?? [],
+      input.cancellationTerms !== undefined ? input.cancellationTerms : current.rows[0].cancellation_terms, input.sortOrder, data.category, data.standardName, data.customName ?? null,
+      JSON.stringify(data.bedrooms), data.maxAdults, data.maxChildren, data.extraBedsAllowed,
+      data.maxExtraBeds, data.extraBedTypes, data.roomSizeSqFt ?? null,
+      data.smokingDesignation, data.bathroomType, data.bathroomFeatures, data.viewTypes, config.TAX_RATE,
+      ],
+    );
+    await audit(client, { actorId: req.user!.id, entity: 'room_type', entityId: roomId, action: 'update', before: roomFromRow({ ...current.rows[0], tax_rate: config.TAX_RATE }), after: input });
+    return updated.rows[0];
+  });
+  res.json(roomFromRow(result));
 }));
 
 adminRouter.delete('/rooms/:id', requirePermission(permissions.roomsManage), asyncHandler(async (req, res) => {
@@ -426,6 +419,18 @@ adminRouter.delete('/rooms/:id', requirePermission(permissions.roomsManage), asy
     after: roomFromRow(result.rows[0]),
   });
   res.json({ ok: true });
+}));
+
+adminRouter.put('/rates/default', asyncHandler(async (req, res) => {
+  const input = defaultRateWriteSchema.parse(req.body);
+  const result = await pool.query(
+    `update room_types set base_price = $2, updated_at = now()
+     where id = $1 and deleted_at is null returning *, $3::numeric as tax_rate`,
+    [input.roomId, input.rate, config.TAX_RATE],
+  );
+  if (!result.rowCount) throw notFound('room_not_found', 'Room type was not found.');
+  await audit(pool, { actorId: req.user!.id, entity: 'room_type', entityId: input.roomId, action: 'default_rate_update', after: input });
+  res.json(roomFromRow(result.rows[0]));
 }));
 
 adminRouter.post('/rates/set', asyncHandler(async (req, res) => {
@@ -466,6 +471,16 @@ adminRouter.post('/inventory/remaining', asyncHandler(async (req, res) => {
   res.json({ ok: true, inventory, booked });
 }));
 
+adminRouter.patch('/inventory/status', asyncHandler(async (req, res) => {
+  const input = inventoryStatusWriteSchema.parse(req.body);
+  const day = await withTransaction(client => setInventoryStatus(client, {
+    ...input,
+    actorId: req.user!.id,
+    taxRate: config.TAX_RATE,
+  }));
+  res.json(day);
+}));
+
 adminRouter.post('/inventory/bulk', asyncHandler(async (req, res) => {
   const input = bulkInventorySchema.parse(req.body);
   await withTransaction(async client => {
@@ -477,6 +492,14 @@ adminRouter.post('/inventory/bulk', asyncHandler(async (req, res) => {
       });
     }
     for (const date of input.dates) {
+      const booked = await getBookedCount(client, input.roomId, date);
+      if (input.patch.inventory != null && input.patch.inventory < booked) {
+        throw badRequest('inventory_below_booked', `Inventory cannot be lower than ${booked} booked room(s) on ${date}.`, {
+          date,
+          booked,
+          requestedInventory: input.patch.inventory,
+        });
+      }
       await client.query(
         `insert into inventory_overrides(room_type_id, stay_date, inventory, status, updated_by, updated_at)
          values ($1, $2, $3, $4, $5, now())

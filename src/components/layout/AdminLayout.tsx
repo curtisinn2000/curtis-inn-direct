@@ -16,7 +16,7 @@ const adminNav = [
   { label: 'Dashboard', href: '/admin', icon: LayoutDashboard, permission: ADMIN_PERMISSIONS.dashboardRead },
   { label: 'Reservations', href: '/admin/reservations', icon: CalendarDays, permission: ADMIN_PERMISSIONS.reservationsRead },
   { label: 'Availability Center', href: '/admin/calendar', icon: CalendarDays, permission: ADMIN_PERMISSIONS.availabilityRead },
-  { label: 'Rooms', href: '/admin/rooms', icon: BedDouble, permission: ADMIN_PERMISSIONS.roomsRead },
+  { label: 'Room Types', href: '/admin/room-types', icon: BedDouble, permission: ADMIN_PERMISSIONS.roomsRead },
   { label: 'Rates', href: '/admin/rates', icon: DollarSign, permission: ADMIN_PERMISSIONS.ratesRead },
   { label: 'Payments', href: '/admin/payments', icon: CreditCard, permission: ADMIN_PERMISSIONS.paymentsRead },
   { label: 'Content', href: '/admin/content', icon: FileText, permission: ADMIN_PERMISSIONS.contentRead },

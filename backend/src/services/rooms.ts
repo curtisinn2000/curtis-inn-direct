@@ -29,8 +29,8 @@ export async function getRoomBySlug(db: DbClient, slug: string) {
 
 export async function resolveRoom(db: DbClient, input: { roomTypeId?: string; roomSlug?: string }) {
   const result = input.roomTypeId
-    ? await db.query(`select * from room_types where id = $1 and is_active = true and deleted_at is null`, [input.roomTypeId])
-    : await db.query(`select * from room_types where slug = $1 and is_active = true and deleted_at is null`, [input.roomSlug]);
+    ? await db.query(`select * from room_types where id = $1 and is_active = true and deleted_at is null for share`, [input.roomTypeId])
+    : await db.query(`select * from room_types where slug = $1 and is_active = true and deleted_at is null for share`, [input.roomSlug]);
 
   if (result.rowCount === 0) throw notFound('room_not_found', 'Room type was not found.');
   return result.rows[0];

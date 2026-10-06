@@ -17,16 +17,18 @@ export function BookingWidget() {
   const isMobile = useIsMobile();
   const [range, setRange] = useState<DateRange>();
   const [open, setOpen] = useState(false);
-  const [guests, setGuests] = useState('2');
+  const [adults, setAdults] = useState('2');
+  const [children, setChildren] = useState('0');
   const [rooms, setRooms] = useState('1');
   const [isSearching, setIsSearching] = useState(false);
   const earliestCheckIn = earliestPublicCheckInDate();
-  const guestCount = Number(guests);
+  const adultCount = Number(adults);
+  const childCount = Number(children);
   const roomCount = Number(rooms);
-  const guestCountInvalid = !Number.isInteger(guestCount) || guestCount < 1 || guestCount > 10;
+  const guestCountInvalid = !Number.isInteger(adultCount) || adultCount < 1 || adultCount > 20 || !Number.isInteger(childCount) || childCount < 0 || childCount > 20 || adultCount + childCount > 20;
   const roomCountInvalid = !Number.isInteger(roomCount) || roomCount < 1 || roomCount > 5;
   const countError = guestCountInvalid
-    ? 'Guests must be between 1 and 10.'
+    ? 'Enter 1 to 20 adults and no more than 20 total guests.'
     : roomCountInvalid
       ? 'Rooms must be between 1 and 5.'
       : '';
@@ -37,7 +39,9 @@ export function BookingWidget() {
     const params = new URLSearchParams({
       checkIn: format(range.from, 'yyyy-MM-dd'),
       checkOut: format(range.to, 'yyyy-MM-dd'),
-      guests,
+      adults,
+      children,
+      guests: String(adultCount + childCount),
       rooms,
     });
     navigate(`/booking?${params.toString()}`);
@@ -51,7 +55,7 @@ export function BookingWidget() {
 
   return (
     <div className="rounded-lg border border-border/80 bg-card p-4 shadow-xl sm:p-5 lg:p-6">
-      <div className="grid grid-cols-1 items-end gap-3 md:grid-cols-2 lg:grid-cols-[minmax(320px,1fr)_140px_125px_180px] lg:gap-4">
+      <div className="grid grid-cols-1 items-end gap-3 md:grid-cols-2 lg:grid-cols-[minmax(300px,1fr)_110px_110px_100px_160px] lg:gap-4">
         <div className="md:col-span-2 lg:col-span-1">
           <Label className="mb-2 flex items-center gap-2 text-xs font-semibold text-foreground">
             <CalendarIcon className="h-4 w-4 text-accent" /> Check-in and check-out
@@ -88,20 +92,25 @@ export function BookingWidget() {
         </div>
 
         <div className="w-full">
-          <Label htmlFor="guests" className="mb-2 flex items-center gap-2 text-xs font-semibold text-foreground">
-            <Users className="h-4 w-4 text-accent" /> Guests
+          <Label htmlFor="adults" className="mb-2 flex items-center gap-2 text-xs font-semibold text-foreground">
+            <Users className="h-4 w-4 text-accent" /> Adults
           </Label>
           <Input
-            id="guests"
+            id="adults"
             type="number"
             inputMode="numeric"
             min="1"
-            max="10"
-            value={guests}
-            onChange={event => setGuests(event.target.value)}
+            max="20"
+            value={adults}
+            onChange={event => setAdults(event.target.value)}
             className="h-14 bg-background px-4 text-base"
             aria-invalid={guestCountInvalid}
           />
+        </div>
+
+        <div className="w-full">
+          <Label htmlFor="children" className="mb-2 text-xs font-semibold text-foreground">Children</Label>
+          <Input id="children" type="number" inputMode="numeric" min="0" max="20" value={children} onChange={event => setChildren(event.target.value)} className="h-14 bg-background px-4 text-base" aria-invalid={guestCountInvalid} />
         </div>
 
         <div className="w-full">

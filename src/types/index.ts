@@ -26,6 +26,10 @@ export type PaymentMethod =
   | 'clover_deposit';
 
 export type RoomCategorySlug = string;
+export type RoomCategory = 'room' | 'suite' | 'studio' | 'apartment';
+export type BedType = 'twin' | 'double' | 'queen' | 'king' | 'bunk' | 'sofa' | 'futon' | 'trundle' | 'murphy' | 'other';
+export interface RoomBed { type: BedType; quantity: number; customLabel?: string }
+export interface RoomBedroom { name: string; beds: RoomBed[] }
 
 // --- Room Types ---
 export interface RoomType {
@@ -35,7 +39,23 @@ export interface RoomType {
   shortDescription: string;
   longDescription: string;
   occupancy: number;
+  maxGuests: number;
+  maxAdults: number;
+  maxChildren: number;
   bedType: string;
+  bedSummary: string;
+  bedrooms: RoomBedroom[];
+  category: RoomCategory;
+  standardName: string;
+  customName: string | null;
+  extraBedsAllowed: boolean;
+  maxExtraBeds: number;
+  extraBedTypes: string[];
+  roomSizeSqFt: number | null;
+  smokingDesignation: 'non_smoking' | 'smoking' | 'unspecified';
+  bathroomType: 'private' | 'shared' | 'unspecified';
+  bathroomFeatures: string[];
+  viewTypes: string[];
   images: string[];
   amenities: string[];
   policies: string[];
@@ -43,7 +63,7 @@ export interface RoomType {
   taxRate: number;
   isActive: boolean;
   inventoryCount: number;
-  cancellationTerms: string;
+  cancellationTerms: string | null;
   sortOrder: number;
 }
 
@@ -59,6 +79,8 @@ export interface Reservation {
   checkOut: string;
   nights: number;
   guests: number;
+  adults: number;
+  children: number;
   rooms: number;
   guest: GuestInfo;
   specialRequests: string;
@@ -141,8 +163,11 @@ export interface AdminCalendarDay {
   inventory: number;
   booked: number;
   remaining: number;
+  sellableRemaining: number;
   status: InventoryStatus;
+  availabilityState: 'open' | 'closed' | 'sold_out';
   rate: number;
+  updatedAt: string | null;
 }
 
 export interface AdminCalendarRoom {
@@ -352,7 +377,9 @@ export interface DashboardStats {
 export interface AvailabilitySearch {
   checkIn: string;
   checkOut: string;
-  guests: number;
+  adults: number;
+  children: number;
+  guests?: number;
   rooms: number;
 }
 

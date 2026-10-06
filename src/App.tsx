@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -21,7 +21,8 @@ import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminReservationsPage from "./pages/admin/AdminReservationsPage";
 import AdminReservationDetailPage from "./pages/admin/AdminReservationDetailPage";
 import AdminCalendarPage from "./pages/admin/AdminCalendarPage";
-import AdminRoomsPage from "./pages/admin/AdminRoomsPage";
+import AdminRoomTypesPage from "./pages/admin/AdminRoomTypesPage";
+import AdminRoomTypeEditorPage from "./pages/admin/AdminRoomTypeEditorPage";
 import AdminRatesPage from "./pages/admin/AdminRatesPage";
 import AdminPaymentsPage from "./pages/admin/AdminPaymentsPage";
 import AdminContentPage from "./pages/admin/AdminContentPage";
@@ -64,7 +65,10 @@ const App = () => (
             <Route path="reservations" element={<RequireAdminPermission permission={ADMIN_PERMISSIONS.reservationsRead}><AdminReservationsPage /></RequireAdminPermission>} />
             <Route path="reservations/:id" element={<RequireAdminPermission permission={ADMIN_PERMISSIONS.reservationsRead}><AdminReservationDetailPage /></RequireAdminPermission>} />
             <Route path="calendar" element={<RequireAdminPermission permission={ADMIN_PERMISSIONS.availabilityRead}><AdminCalendarPage /></RequireAdminPermission>} />
-            <Route path="rooms" element={<RequireAdminPermission permission={ADMIN_PERMISSIONS.roomsRead}><AdminRoomsPage /></RequireAdminPermission>} />
+            <Route path="rooms" element={<Navigate to="/admin/room-types" replace />} />
+            <Route path="room-types" element={<RequireAdminPermission permission={ADMIN_PERMISSIONS.roomsRead}><AdminRoomTypesPage /></RequireAdminPermission>} />
+            <Route path="room-types/new" element={<RequireAdminPermission permission={ADMIN_PERMISSIONS.roomsManage}><AdminRoomTypeEditorPage /></RequireAdminPermission>} />
+            <Route path="room-types/:id/edit" element={<RequireAdminPermission permission={ADMIN_PERMISSIONS.roomsManage}><AdminRoomTypeEditorPage /></RequireAdminPermission>} />
             <Route path="rates" element={<RequireAdminPermission permission={ADMIN_PERMISSIONS.ratesRead}><AdminRatesPage /></RequireAdminPermission>} />
             <Route path="payments" element={<RequireAdminPermission permission={ADMIN_PERMISSIONS.paymentsRead}><AdminPaymentsPage /></RequireAdminPermission>} />
             <Route path="content" element={<RequireAdminPermission permission={ADMIN_PERMISSIONS.contentRead}><AdminContentPage /></RequireAdminPermission>} />

@@ -33,7 +33,9 @@ export default function CheckoutPage() {
 
   const checkIn = searchParams.get('checkIn') || '';
   const checkOut = searchParams.get('checkOut') || '';
-  const guests = Number(searchParams.get('guests')) || 1;
+  const adults = Number(searchParams.get('adults') ?? searchParams.get('guests')) || 1;
+  const children = Number(searchParams.get('children')) || 0;
+  const guests = adults + children;
   const rooms = Number(searchParams.get('rooms')) || 1;
   const legacyRoomSlug = searchParams.get('roomSlug') || searchParams.get('room') || '';
   const items = useMemo(
@@ -78,7 +80,7 @@ export default function CheckoutPage() {
       setQuoteLoading(true);
       setQuoteError('');
       try {
-        const result = await quoteAvailability({ checkIn, checkOut, guests, rooms }, items);
+        const result = await quoteAvailability({ checkIn, checkOut, adults, children, guests, rooms }, items);
         if (!cancelled) setQuote(result);
       } catch (err) {
         if (!cancelled) {
@@ -91,7 +93,7 @@ export default function CheckoutPage() {
     }
     void loadQuote();
     return () => { cancelled = true; };
-  }, [checkIn, checkOut, guests, rooms, items]);
+  }, [checkIn, checkOut, adults, children, guests, rooms, items]);
 
   if (quoteLoading) {
     return (
@@ -116,7 +118,7 @@ export default function CheckoutPage() {
     setSubmitting(true);
     try {
       const payload: BookingFormData = {
-        search: { checkIn, checkOut, guests, rooms },
+        search: { checkIn, checkOut, adults, children, guests, rooms },
         selectedRoom: null,
         items,
         guestInfo: guest,

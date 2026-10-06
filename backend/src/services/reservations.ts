@@ -22,6 +22,8 @@ export type CreateReservationInput = {
     checkIn: string;
     checkOut: string;
     guests: number;
+    adults: number;
+    children: number;
     rooms: number;
   };
   guestInfo: {
@@ -42,6 +44,8 @@ type PricedCartLine = {
     slug: string;
     name: string;
     occupancy: number;
+    max_adults: number;
+    max_children: number;
     base_price: number;
     base_inventory: number;
   };
@@ -82,10 +86,14 @@ async function priceCart(db: DbClient, input: CreateReservationInput) {
   const lines: PricedCartLine[] = [];
   let subtotalCents = 0;
   let totalCapacity = 0;
+  let adultCapacity = 0;
+  let childCapacity = 0;
 
   for (const item of items) {
     const room = await resolveRoom(db, { roomTypeId: item.roomTypeId, roomSlug: item.roomSlug });
     totalCapacity += Number(room.occupancy) * item.rooms;
+    adultCapacity += Number(room.max_adults ?? room.occupancy) * item.rooms;
+    childCapacity += Number(room.max_children ?? room.occupancy) * item.rooms;
     const availability = await priceAndAvailabilityForRoom(db, {
       roomId: room.id,
       basePrice: room.base_price,
@@ -118,6 +126,12 @@ async function priceCart(db: DbClient, input: CreateReservationInput) {
       guests: input.search.guests,
       capacity: totalCapacity,
     });
+  }
+  if (adultCapacity < input.search.adults) {
+    throw badRequest('adult_capacity_exceeded', 'Selected rooms do not have enough adult capacity.', { adults: input.search.adults, capacity: adultCapacity });
+  }
+  if (childCapacity < input.search.children) {
+    throw badRequest('child_capacity_exceeded', 'Selected rooms do not have enough child capacity.', { children: input.search.children, capacity: childCapacity });
   }
 
   const taxCents = Math.round(subtotalCents * config.TAX_RATE);
@@ -185,15 +199,15 @@ export async function createReservation(input: CreateReservationInput) {
     const confirmationNumber = await issueConfirmationNumber(client);
     const reservationResult = await client.query(
       `insert into reservations (
-        confirmation_number, room_type_id, check_in, check_out, guests, rooms,
+        confirmation_number, room_type_id, check_in, check_out, guests, adults, children, rooms,
         guest_first_name, guest_last_name, guest_email, guest_phone,
         arrival_time, special_requests, status, payment_status, payment_method,
         subtotal_cents, tax_cents, deposit_cents, total_cents, source, idempotency_key
        ) values (
-        $1, $2, $3, $4, $5, $6,
-        $7, $8, $9, $10,
-        $11, $12, $13, $14, $15,
-        $16, $17, $18, $19, 'direct_website', $20
+        $1, $2, $3, $4, $5, $6, $7, $8,
+        $9, $10, $11, $12,
+        $13, $14, $15, $16, $17,
+        $18, $19, $20, $21, 'direct_website', $22
        )
        returning *`,
       [
@@ -202,6 +216,8 @@ export async function createReservation(input: CreateReservationInput) {
         input.search.checkIn,
         input.search.checkOut,
         input.search.guests,
+        input.search.adults,
+        input.search.children,
         quote.totalRooms,
         input.guestInfo.firstName,
         input.guestInfo.lastName,

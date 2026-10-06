@@ -4,7 +4,7 @@ import { addDays, format, isBefore, startOfToday } from 'date-fns';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ChevronLeft, ChevronRight, ChevronDown, Bed, Loader2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronDown, Bed, Loader2, Check, X, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BulkUpdateDialog } from '@/components/admin/BulkUpdateDialog';
 import {
@@ -12,8 +12,11 @@ import {
   getAdminCalendar,
   setRemainingAvailability,
   setRoomRate,
+  setInventoryStatus,
 } from '@/services/api';
 import type { AdminCalendarDay, AdminCalendarResponse, AdminCalendarRoom } from '@/types';
+import { useAdminSession, hasAdminPermission } from '@/contexts/AdminSessionContext';
+import { ADMIN_PERMISSIONS } from '@/config/adminPermissions';
 
 const DAY_WINDOW = 14;
 
@@ -26,6 +29,7 @@ const occupancyTone = (pct: number) =>
   pct >= 0.85 ? 'destructive' : pct >= 0.6 ? 'warning' : 'success';
 
 export default function AdminCalendarPage() {
+  const { user } = useAdminSession();
   const today = startOfToday();
   const [startDate, setStartDate] = useState<Date>(today);
   const [roomFilter, setRoomFilter] = useState<string>('all');
@@ -34,6 +38,8 @@ export default function AdminCalendarPage() {
   const [calendar, setCalendar] = useState<AdminCalendarResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [savingStatus, setSavingStatus] = useState<string | null>(null);
+  const canManage = hasAdminPermission(user, ADMIN_PERMISSIONS.availabilityManage);
 
   const startKey = format(startDate, 'yyyy-MM-dd');
 
@@ -76,6 +82,42 @@ export default function AdminCalendarPage() {
     await loadCalendar();
   };
 
+  const handleStatusChange = async (roomId: string, day: AdminCalendarDay) => {
+    if (!calendar || !canManage || day.availabilityState === 'sold_out') return;
+    const key = `${roomId}|${day.date}`;
+    const nextStatus = day.status === 'open' ? 'closed' : 'open';
+    const previous = calendar;
+    setSavingStatus(key);
+    setCalendar(current => current ? {
+      ...current,
+      rooms: current.rooms.map(room => room.roomType.id !== roomId ? room : {
+        ...room,
+        days: room.days.map(item => item.date !== day.date ? item : {
+          ...item,
+          status: nextStatus,
+          sellableRemaining: nextStatus === 'closed' ? 0 : item.remaining,
+          availabilityState: nextStatus === 'closed' ? 'closed' : item.remaining === 0 ? 'sold_out' : 'open',
+        }),
+      }),
+    } : current);
+    try {
+      const saved = await setInventoryStatus({ roomId, date: day.date, status: nextStatus, expectedUpdatedAt: day.updatedAt });
+      setCalendar(current => current ? {
+        ...current,
+        rooms: current.rooms.map(room => room.roomType.id !== roomId ? room : {
+          ...room,
+          days: room.days.map(item => item.date === day.date ? saved : item),
+        }),
+      } : current);
+      toast.success(nextStatus === 'closed' ? 'Date closed for sale.' : saved.availabilityState === 'sold_out' ? 'Date reopened, but remains sold out.' : 'Date opened for sale.');
+    } catch (err) {
+      setCalendar(previous);
+      toast.error(err instanceof Error ? err.message : 'Unable to update availability.');
+    } finally {
+      setSavingStatus(null);
+    }
+  };
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
@@ -83,7 +125,7 @@ export default function AdminCalendarPage() {
           <h1 className="text-title">Availability Center</h1>
           <p className="text-sm text-muted-foreground">Manage occupancy, inventory, and rates across your rooms</p>
         </div>
-        <Button onClick={() => setBulkOpen(true)} disabled={loading || !calendar}>Bulk Update</Button>
+        {canManage && <Button onClick={() => setBulkOpen(true)} disabled={loading || !calendar}>Bulk Update</Button>}
       </div>
 
       <Card className="p-4 space-y-4">
@@ -185,6 +227,9 @@ export default function AdminCalendarPage() {
                   dateColTemplate={dateColTemplate}
                   today={today}
                   onSaved={loadCalendar}
+                  canManage={canManage}
+                  savingStatus={savingStatus}
+                  onStatusChange={day => void handleStatusChange(room.roomType.id, day)}
                 />
               ))}
             </div>
@@ -195,7 +240,7 @@ export default function AdminCalendarPage() {
           <span className="flex items-center gap-1.5"><span className="w-3 h-1.5 rounded-full bg-success" /> Low occupancy</span>
           <span className="flex items-center gap-1.5"><span className="w-3 h-1.5 rounded-full bg-warning" /> Filling up</span>
           <span className="flex items-center gap-1.5"><span className="w-3 h-1.5 rounded-full bg-destructive" /> Near full</span>
-          <span className="ml-auto">Click a Rate cell to edit. Reflects on booking site instantly.</span>
+          <span className="ml-auto">Green dates are open, red dates are manually closed, and yellow dates are sold out.</span>
         </div>
       </Card>
 
@@ -216,6 +261,9 @@ function CalendarRoomRows({
   dateColTemplate,
   today,
   onSaved,
+  canManage,
+  savingStatus,
+  onStatusChange,
 }: {
   room: AdminCalendarRoom;
   expanded: boolean;
@@ -223,33 +271,30 @@ function CalendarRoomRows({
   dateColTemplate: string;
   today: Date;
   onSaved: () => Promise<void>;
+  canManage: boolean;
+  savingStatus: string | null;
+  onStatusChange: (day: AdminCalendarDay) => void;
 }) {
   return (
     <div className="border-b last:border-b-0">
-      <button
-        onClick={onToggle}
-        className="w-full grid hover:bg-muted/30 transition-colors text-left"
-        style={{ gridTemplateColumns: dateColTemplate }}
-      >
-        <div className="p-3 flex items-center gap-2">
+      <div className="w-full grid hover:bg-muted/20 transition-colors" style={{ gridTemplateColumns: dateColTemplate }}>
+        <button onClick={onToggle} className="p-3 flex items-center gap-2 text-left">
           <ChevronDown className={cn('h-4 w-4 text-muted-foreground transition-transform', !expanded && '-rotate-90')} />
           <Bed className="h-4 w-4 text-muted-foreground" />
           <span className="text-sm font-medium truncate">{room.roomType.name}</span>
-        </div>
+        </button>
         {room.days.map(day => (
-          <div key={day.date} className={cn(
-            'p-2 text-center border-l text-xs font-medium',
-            day.status === 'closed' ? 'text-muted-foreground italic' :
-            day.remaining === 0 ? 'text-destructive' : day.remaining <= 1 ? 'text-warning' : 'text-muted-foreground',
-          )}>
-            {day.status === 'closed' ? '-' : day.remaining}
-          </div>
+          <AvailabilityCell key={day.date} day={day} disabled={!canManage || isBefore(toDate(day.date), today)} saving={savingStatus === `${room.roomType.id}|${day.date}`} onClick={() => onStatusChange(day)} />
         ))}
-      </button>
+      </div>
 
       {expanded && (
         <>
           <div className="grid bg-card" style={{ gridTemplateColumns: dateColTemplate }}>
+            <div className="p-2 pl-10 text-xs text-muted-foreground">Inventory</div>
+            {room.days.map(day => <div key={day.date} className="p-2 text-center border-l text-xs">{day.inventory}</div>)}
+          </div>
+          <div className="grid bg-card border-t" style={{ gridTemplateColumns: dateColTemplate }}>
             <div className="p-2 pl-10 text-xs text-muted-foreground">Net rooms booked</div>
             {room.days.map(day => (
               <div key={day.date} className="p-2 text-center border-l text-xs">
@@ -264,7 +309,7 @@ function CalendarRoomRows({
                 key={day.date}
                 room={room}
                 day={day}
-                disabled={isBefore(toDate(day.date), today)}
+                disabled={!canManage || isBefore(toDate(day.date), today)}
                 onSaved={onSaved}
               />
             ))}
@@ -276,7 +321,7 @@ function CalendarRoomRows({
                 key={day.date}
                 roomId={room.roomType.id}
                 day={day}
-                disabled={isBefore(toDate(day.date), today)}
+                disabled={!canManage || isBefore(toDate(day.date), today)}
                 onSaved={onSaved}
               />
             ))}
@@ -284,6 +329,23 @@ function CalendarRoomRows({
         </>
       )}
     </div>
+  );
+}
+
+function AvailabilityCell({ day, disabled, saving, onClick }: { day: AdminCalendarDay; disabled: boolean; saving: boolean; onClick: () => void }) {
+  const soldOut = day.availabilityState === 'sold_out';
+  const closed = day.availabilityState === 'closed';
+  return (
+    <button type="button" disabled={disabled || saving || soldOut} onClick={onClick} className={cn(
+      'm-1.5 min-h-9 rounded-md border flex items-center justify-center gap-1 text-[10px] font-semibold transition-colors',
+      day.availabilityState === 'open' && 'border-success/40 bg-success/15 text-success hover:bg-success/25',
+      closed && 'border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/20',
+      soldOut && 'border-warning/50 bg-warning/15 text-warning cursor-default',
+      disabled && 'opacity-55 cursor-not-allowed',
+    )} title={soldOut ? 'Sold out. Increase inventory to make this date sellable.' : closed ? 'Click to reopen' : 'Click to close'}>
+      {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : soldOut ? <AlertTriangle className="h-3.5 w-3.5" /> : closed ? <X className="h-3.5 w-3.5" /> : <Check className="h-3.5 w-3.5" />}
+      {soldOut ? 'Sold out' : closed ? 'Closed' : 'Open'}
+    </button>
   );
 }
 

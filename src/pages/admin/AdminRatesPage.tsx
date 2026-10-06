@@ -14,19 +14,26 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { Card } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { clearRoomRates, getAdminRoomTypes } from '@/services/api';
+import { clearRoomRates, getAdminRoomTypes, setDefaultRoomRate } from '@/services/api';
 import type { RoomType } from '@/types';
 import { dateFromKey, hotelTodayKey } from '@/lib/bookingDates';
 import { Eraser, Loader2 } from 'lucide-react';
+import { useAdminSession, hasAdminPermission } from '@/contexts/AdminSessionContext';
+import { ADMIN_PERMISSIONS } from '@/config/adminPermissions';
 
 export default function AdminRatesPage() {
+  const { user } = useAdminSession();
+  const canManage = hasAdminPermission(user, ADMIN_PERMISSIONS.ratesManage);
   const { toast } = useToast();
   const [rooms, setRooms] = useState<RoomType[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [clearing, setClearing] = useState(false);
   const [open, setOpen] = useState(false);
+  const [defaultRates, setDefaultRates] = useState<Record<string, string>>({});
+  const [savingRate, setSavingRate] = useState<string | null>(null);
 
   const activeRooms = useMemo(
     () => rooms.filter(room => room.isActive).sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name)),
@@ -37,12 +44,26 @@ export default function AdminRatesPage() {
     setLoading(true);
     setError('');
     try {
-      setRooms(await getAdminRoomTypes());
+      const result = await getAdminRoomTypes();
+      setRooms(result);
+      setDefaultRates(Object.fromEntries(result.map(room => [room.id, String(room.basePrice)])));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to load room types.');
     } finally {
       setLoading(false);
     }
+  };
+
+  const saveDefaultRate = async (room: RoomType) => {
+    const rate = Math.max(0, Math.round(Number(defaultRates[room.id]) || 0));
+    setSavingRate(room.id);
+    try {
+      await setDefaultRoomRate(room.id, rate);
+      toast({ title: 'Default rate saved', description: `${room.name} will use $${rate} before date-specific adjustments.` });
+      await loadRooms();
+    } catch (err) {
+      toast({ title: 'Unable to save default rate', description: err instanceof Error ? err.message : 'Please try again.', variant: 'destructive' });
+    } finally { setSavingRate(null); }
   };
 
   useEffect(() => {
@@ -115,7 +136,10 @@ export default function AdminRatesPage() {
         </Card>
       )}
 
-      {!loading && !error && <BulkPriceUpdatePanel rooms={activeRooms} />}
+      {!loading && !error && <div className="space-y-6">
+        <Card className="p-5"><div className="mb-4"><h2 className="font-semibold">Default nightly rates</h2><p className="text-sm text-muted-foreground">Every room type needs a positive default rate before it can be published. Date-specific rates override this value.</p></div><div className="divide-y">{rooms.map(room => <div key={room.id} className="flex flex-wrap items-center justify-between gap-3 py-3"><div><p className="font-medium">{room.name}</p><p className="text-xs text-muted-foreground">{room.isActive ? 'Active' : 'Draft'}</p></div><div className="flex items-center gap-2"><span className="text-sm">$</span><Input className="w-28" type="number" min={0} max={9999} disabled={!canManage || savingRate === room.id} value={defaultRates[room.id] ?? ''} onChange={event => setDefaultRates(current => ({ ...current, [room.id]: event.target.value }))} /><Button size="sm" variant="outline" disabled={!canManage || savingRate === room.id} onClick={() => void saveDefaultRate(room)}>{savingRate === room.id ? 'Saving...' : 'Save'}</Button></div></div>)}</div></Card>
+        <BulkPriceUpdatePanel rooms={activeRooms} />
+      </div>}
     </div>
   );
 }

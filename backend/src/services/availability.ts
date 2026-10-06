@@ -10,6 +10,8 @@ export type AvailabilityInput = {
   checkIn: string;
   checkOut: string;
   guests: number;
+  adults: number;
+  children: number;
   rooms: number;
 };
 
@@ -31,6 +33,8 @@ export async function searchAvailability(db: DbClient, input: AvailabilityInput)
   const nights = validateStayWindow(input);
   const stayDates = eachStayDate(input.checkIn, input.checkOut);
   const minOccupancyForListing = Math.max(1, Math.ceil(input.guests / input.rooms));
+  const minAdultsForListing = Math.max(1, Math.ceil(input.adults / input.rooms));
+  const minChildrenForListing = Math.max(0, Math.ceil(input.children / input.rooms));
 
   const roomsResult = await db.query(
     `select *, $1::numeric as tax_rate
@@ -38,8 +42,10 @@ export async function searchAvailability(db: DbClient, input: AvailabilityInput)
      where is_active = true
        and deleted_at is null
        and occupancy >= $2
+       and max_adults >= $3
+       and max_children >= $4
      order by sort_order, name`,
-    [config.TAX_RATE, minOccupancyForListing],
+    [config.TAX_RATE, minOccupancyForListing, minAdultsForListing, minChildrenForListing],
   );
 
   const results = [];

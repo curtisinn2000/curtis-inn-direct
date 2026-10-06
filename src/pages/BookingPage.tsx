@@ -32,7 +32,8 @@ export default function BookingPage() {
   const [search, setSearch] = useState<AvailabilitySearch>({
     checkIn: initialCheckIn,
     checkOut: initialCheckOut,
-    guests: Number(searchParams.get('guests')) || 2,
+    adults: Number(searchParams.get('adults') ?? searchParams.get('guests')) || 2,
+    children: Number(searchParams.get('children')) || 0,
     rooms: Number(searchParams.get('rooms')) || 1,
   });
   const [range, setRange] = useState<DateRange | undefined>(() => ({
@@ -140,7 +141,9 @@ export default function BookingPage() {
     const params = new URLSearchParams({
       checkIn: search.checkIn,
       checkOut: search.checkOut,
-      guests: String(search.guests),
+      adults: String(search.adults),
+      children: String(search.children),
+      guests: String(search.adults + search.children),
       rooms: String(search.rooms),
       items: JSON.stringify(cartItems),
     });
@@ -156,7 +159,7 @@ export default function BookingPage() {
         </div>
 
         <Card className="p-6 mb-10">
-          <div className="grid grid-cols-1 md:grid-cols-[1fr_180px_180px_220px] gap-4 items-end">
+          <div className="grid grid-cols-1 md:grid-cols-[1fr_110px_110px_100px_190px] gap-4 items-end">
             <div>
               <Label className="text-xs text-muted-foreground mb-1.5 flex items-center gap-1">
                 <Calendar className="h-3 w-3" /> Check-in and check-out
@@ -189,8 +192,12 @@ export default function BookingPage() {
               </Popover>
             </div>
             <div>
-              <Label className="text-xs text-muted-foreground mb-1.5">Guests</Label>
-              <Input type="number" min={1} max={10} value={search.guests} onChange={e => setSearch(s => ({ ...s, guests: Number(e.target.value) }))} />
+              <Label className="text-xs text-muted-foreground mb-1.5">Adults</Label>
+              <Input type="number" min={1} max={20} value={search.adults} onChange={e => setSearch(s => ({ ...s, adults: Number(e.target.value) }))} />
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground mb-1.5">Children</Label>
+              <Input type="number" min={0} max={20} value={search.children} onChange={e => setSearch(s => ({ ...s, children: Number(e.target.value) }))} />
             </div>
             <div>
               <Label className="text-xs text-muted-foreground mb-1.5">Rooms</Label>
@@ -239,8 +246,8 @@ export default function BookingPage() {
                         <h3 className="text-lg font-semibold mb-1">{result.roomType.name}</h3>
                         <p className="text-sm text-muted-foreground mb-3">{result.roomType.shortDescription}</p>
                         <div className="flex items-center gap-4 text-xs text-muted-foreground mb-3">
-                          <span className="flex items-center gap-1"><Users className="h-3.5 w-3.5" /> {result.roomType.occupancy} guests each</span>
-                          <span className="flex items-center gap-1"><BedDouble className="h-3.5 w-3.5" /> {result.roomType.bedType}</span>
+                          <span className="flex items-center gap-1"><Users className="h-3.5 w-3.5" /> {result.roomType.maxGuests} guests, {result.roomType.maxAdults} adults</span>
+                          <span className="flex items-center gap-1"><BedDouble className="h-3.5 w-3.5" /> {result.roomType.bedSummary}</span>
                         </div>
                         <div className="flex gap-1.5 flex-wrap">
                           <Badge variant="secondary" className="text-xs">Free cancellation</Badge>

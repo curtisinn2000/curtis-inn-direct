@@ -4,12 +4,10 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Users, BedDouble, Check, ArrowLeft, Loader2 } from 'lucide-react';
 import roomImg from '@/assets/room-king.jpg';
-import type { RoomType } from '@/types';
-import { getRoomBySlug } from '@/services/api';
+import type { HotelPolicies, RoomType } from '@/types';
+import { getHotelPolicies, getRoomBySlug } from '@/services/api';
 
 const DEFAULT_AMENITIES = ['Free Wi-Fi', 'Air Conditioning', 'Flat-screen TV', 'Private Bathroom'];
-const DEFAULT_POLICIES = ['Non-smoking', 'No pets'];
-const DEFAULT_CANCELLATION = 'Free cancellation up to 48 hours before check-in.';
 
 export default function RoomDetailPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -17,6 +15,7 @@ export default function RoomDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeImg, setActiveImg] = useState(0);
+  const [hotelPolicies, setHotelPolicies] = useState<HotelPolicies | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -30,8 +29,8 @@ export default function RoomDetailPage() {
       setError(null);
       setActiveImg(0);
       try {
-        const result = await getRoomBySlug(slug);
-        if (!cancelled) setRoom(result);
+        const [result, policies] = await Promise.all([getRoomBySlug(slug), getHotelPolicies()]);
+        if (!cancelled) { setRoom(result); setHotelPolicies(policies); }
       } catch (err) {
         if (!cancelled) {
           setRoom(null);
@@ -65,8 +64,14 @@ export default function RoomDetailPage() {
   }
 
   const amenities = room.amenities.length ? room.amenities : DEFAULT_AMENITIES;
-  const policies = room.policies.length ? room.policies : DEFAULT_POLICIES;
-  const cancellationTerms = room.cancellationTerms || DEFAULT_CANCELLATION;
+  const policies = [...new Set([
+    hotelPolicies?.smokingPolicy,
+    hotelPolicies?.petPolicy,
+    hotelPolicies?.depositPolicy,
+    hotelPolicies?.incidentalsPolicy,
+    ...room.policies,
+  ].filter((item): item is string => Boolean(item)))];
+  const cancellationTerms = room.cancellationTerms || hotelPolicies?.cancellationRule || '';
   const visiblePolicies = policies.filter(policy => policy.trim().toLowerCase() !== cancellationTerms.trim().toLowerCase());
   const soldOut = room.inventoryCount === 0;
   const images = room.images.length ? room.images : [roomImg];
@@ -102,8 +107,15 @@ export default function RoomDetailPage() {
             <p className="text-body text-muted-foreground mb-6">{room.longDescription}</p>
 
             <div className="flex items-center gap-6 mb-6 text-sm">
-              <span className="flex items-center gap-2"><Users className="h-4 w-4 text-muted-foreground" /> Up to {room.occupancy} guests</span>
-              <span className="flex items-center gap-2"><BedDouble className="h-4 w-4 text-muted-foreground" /> {room.bedType}</span>
+              <span className="flex items-center gap-2"><Users className="h-4 w-4 text-muted-foreground" /> Up to {room.maxGuests} guests ({room.maxAdults} adults, {room.maxChildren} children)</span>
+              <span className="flex items-center gap-2"><BedDouble className="h-4 w-4 text-muted-foreground" /> {room.bedSummary}</span>
+            </div>
+
+            <div className="mb-6 flex flex-wrap gap-2 text-xs text-muted-foreground">
+              {room.roomSizeSqFt && <Badge variant="outline">{room.roomSizeSqFt} sq ft</Badge>}
+              <Badge variant="outline">{room.smokingDesignation === 'non_smoking' ? 'Non-smoking' : room.smokingDesignation === 'smoking' ? 'Smoking permitted' : 'Smoking not specified'}</Badge>
+              <Badge variant="outline">{room.bathroomType === 'private' ? 'Private bathroom' : room.bathroomType === 'shared' ? 'Shared bathroom' : 'Bathroom not specified'}</Badge>
+              {room.viewTypes.filter(view => view !== 'none').map(view => <Badge key={view} variant="outline">{view} view</Badge>)}
             </div>
 
             <div className="p-5 rounded-lg bg-muted mb-6">
