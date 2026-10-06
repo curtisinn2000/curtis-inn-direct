@@ -1,6 +1,67 @@
 import { scriptPool } from './scriptDb.js';
+import { dateOnlyKey, eachStayDate } from '../date-utils.js';
+import { ACTIVE_INVENTORY_HOLD_STATUSES, deriveInventoryAvailability } from '../services/inventoryAvailability.js';
 
-const CAPACITY_STATUSES = ['pending', 'confirmed', 'checked_in', 'checked_out'];
+const CAPACITY_STATUSES = [...ACTIVE_INVENTORY_HOLD_STATUSES];
+
+async function verifyReservation(confirmationNumber: string) {
+  const reservationResult = await scriptPool.query(
+    `select id, confirmation_number, check_in, check_out, status
+     from reservations
+     where lower(confirmation_number) = lower($1)`,
+    [confirmationNumber],
+  );
+  if (!reservationResult.rowCount) return { found: false, confirmationNumber };
+
+  const reservation = reservationResult.rows[0];
+  const nightsResult = await scriptPool.query(
+    `with target_nights as (
+       select room_type_id, stay_date, rooms
+       from reservation_nights
+       where reservation_id = $1
+     )
+     select rt.name as "roomName", target_nights.stay_date::text as date,
+       target_nights.rooms as "reservationRooms",
+       coalesce(io.inventory, rt.base_inventory)::int as inventory,
+       coalesce(io.status, 'open')::text as status,
+       coalesce(sum(all_nights.rooms) filter (where all_reservations.status = any($2::reservation_status[])), 0)::int as booked
+     from target_nights
+     join room_types rt on rt.id = target_nights.room_type_id
+     left join inventory_overrides io on io.room_type_id = target_nights.room_type_id and io.stay_date = target_nights.stay_date
+     left join reservation_nights all_nights on all_nights.room_type_id = target_nights.room_type_id and all_nights.stay_date = target_nights.stay_date
+     left join reservations all_reservations on all_reservations.id = all_nights.reservation_id
+     group by rt.name, rt.base_inventory, target_nights.stay_date, target_nights.rooms, io.inventory, io.status
+     order by target_nights.stay_date, rt.name`,
+    [reservation.id, CAPACITY_STATUSES],
+  );
+
+  const checkIn = dateOnlyKey(reservation.check_in);
+  const checkOut = dateOnlyKey(reservation.check_out);
+  const nights = nightsResult.rows.map(row => ({
+    roomName: String(row.roomName),
+    date: dateOnlyKey(row.date),
+    reservationRooms: Number(row.reservationRooms),
+    inventory: Number(row.inventory),
+    booked: Number(row.booked),
+    status: String(row.status),
+    ...deriveInventoryAvailability(
+      Number(row.inventory),
+      Number(row.booked),
+      String(row.status) as 'open' | 'closed',
+    ),
+  }));
+
+  return {
+    found: true,
+    confirmationNumber: String(reservation.confirmation_number),
+    reservationStatus: String(reservation.status),
+    checkIn,
+    checkOut,
+    expectedStayDates: eachStayDate(checkIn, checkOut),
+    checkoutConsumed: nights.some(night => night.date === checkOut),
+    nights,
+  };
+}
 
 async function main() {
   const invalidOverrides = await scriptPool.query(
@@ -50,6 +111,8 @@ async function main() {
   const invalidOverrideCount = invalidOverrides.rowCount ?? invalidOverrides.rows.length;
   const bookedOverCapacityCount = manualReview.rowCount ?? manualReview.rows.length;
   const repairableCount = invalidOverrides.rows.filter(row => row.repairable).length;
+  const confirmationNumber = process.env.CONFIRMATION_NUMBER?.trim();
+  const reservationVerification = confirmationNumber ? await verifyReservation(confirmationNumber) : undefined;
   console.log(JSON.stringify({
     invalidOverrideCount,
     repairableOverrideCount: repairableCount,
@@ -58,6 +121,7 @@ async function main() {
     ...migrationAudit.rows[0],
     invalidOverrides: invalidOverrides.rows,
     manualReview: manualReview.rows,
+    ...(reservationVerification ? { reservationVerification } : {}),
   }));
 }
 

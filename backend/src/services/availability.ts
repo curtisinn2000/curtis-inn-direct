@@ -3,8 +3,9 @@ import { addYearsKey, diffDays, eachStayDate, earliestPublicCheckInKey, isWeeken
 import { badRequest } from '../errors.js';
 import { config } from '../config.js';
 import { roomFromRow } from '../transformers.js';
+import { ACTIVE_INVENTORY_HOLD_STATUSES, deriveInventoryAvailability } from './inventoryAvailability.js';
 
-const ACTIVE_HOLD_STATUSES = ['pending', 'confirmed', 'checked_in'];
+const ACTIVE_HOLD_STATUSES = [...ACTIVE_INVENTORY_HOLD_STATUSES];
 
 export type AvailabilityInput = {
   checkIn: string;
@@ -110,8 +111,12 @@ export async function priceAndAvailabilityForRoom(
     );
 
     const day = result.rows[0];
-    const remaining = day.status === 'closed' ? 0 : Math.max(0, Number(day.inventory) - Number(day.booked));
-    minRemaining = Math.min(minRemaining, remaining);
+    const availability = deriveInventoryAvailability(
+      Number(day.inventory),
+      Number(day.booked),
+      String(day.status) as 'open' | 'closed',
+    );
+    minRemaining = Math.min(minRemaining, availability.sellableRemaining);
     const rateCents = Number(day.rate) * 100;
     subtotalCents += rateCents * input.roomsNeeded;
     nightlyRates.push({ date: stayDate, rateCents });

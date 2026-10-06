@@ -2,8 +2,9 @@ import type { DbClient } from '../db.js';
 import { badRequest, conflict, notFound } from '../errors.js';
 import { audit, roomFromRow } from '../transformers.js';
 import { hotelTodayKey } from '../date-utils.js';
+import { ACTIVE_INVENTORY_HOLD_STATUSES, deriveInventoryAvailability } from './inventoryAvailability.js';
 
-const HOLD_STATUSES = ['pending', 'confirmed', 'checked_in'];
+const HOLD_STATUSES = [...ACTIVE_INVENTORY_HOLD_STATUSES];
 
 export function hasFieldConflict<T>(expected: T | undefined, current: T, requested: T) {
   return requested !== current && expected !== undefined && expected !== current;
@@ -12,16 +13,16 @@ export function hasFieldConflict<T>(expected: T | undefined, current: T, request
 export function calendarDayFromRow(row: Record<string, unknown>) {
   const inventory = Number(row.inventory);
   const booked = Number(row.booked);
-  const remaining = Math.max(0, inventory - booked);
   const status = String(row.status) as 'open' | 'closed';
+  const derived = deriveInventoryAvailability(inventory, booked, status);
   return {
     date: String(row.stay_date).slice(0, 10),
     inventory,
     booked,
-    remaining,
-    sellableRemaining: status === 'closed' ? 0 : remaining,
+    remaining: derived.remaining,
+    sellableRemaining: derived.sellableRemaining,
     status,
-    availabilityState: status === 'closed' ? 'closed' : remaining === 0 ? 'sold_out' : 'open',
+    availabilityState: derived.availabilityState,
     rate: Number(row.rate),
     updatedAt: row.updated_at ? new Date(String(row.updated_at)).toISOString() : null,
   };

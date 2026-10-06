@@ -54,6 +54,19 @@ type PricedCartLine = {
   nightlyRates: { date: string; rateCents: number }[];
 };
 
+export function buildReservationNightRows(
+  roomTypeId: string,
+  rooms: number,
+  nightlyRates: { date: string; rateCents: number }[],
+) {
+  return nightlyRates.map(night => ({
+    roomTypeId,
+    stayDate: night.date,
+    rooms,
+    rateCents: night.rateCents,
+  }));
+}
+
 function normalizeBookingItems(input: CreateReservationInput): BookingItemInput[] {
   const items = input.items?.length
     ? input.items
@@ -72,7 +85,7 @@ function normalizeBookingItems(input: CreateReservationInput): BookingItemInput[
   return [...combined.values()];
 }
 
-async function priceCart(db: DbClient, input: CreateReservationInput) {
+export async function priceCart(db: DbClient, input: CreateReservationInput) {
   const nights = validateStayWindow(input.search);
   const items = normalizeBookingItems(input);
   const totalRooms = items.reduce((sum, item) => sum + item.rooms, 0);
@@ -243,11 +256,11 @@ export async function createReservation(input: CreateReservationInput) {
          values ($1, $2, $3, $4)`,
         [reservation.id, line.room.id, line.rooms, line.subtotalCents],
       );
-      for (const night of line.nightlyRates) {
+      for (const night of buildReservationNightRows(String(line.room.id), line.rooms, line.nightlyRates)) {
         await client.query(
           `insert into reservation_nights(reservation_id, room_type_id, stay_date, rooms, rate_cents)
            values ($1, $2, $3, $4, $5)`,
-          [reservation.id, line.room.id, night.date, line.rooms, night.rateCents],
+          [reservation.id, night.roomTypeId, night.stayDate, night.rooms, night.rateCents],
         );
       }
     }

@@ -1,5 +1,6 @@
 import type { DbClient } from '../db.js';
 import { badRequest, conflict } from '../errors.js';
+import { ACTIVE_INVENTORY_HOLD_STATUSES } from './inventoryAvailability.js';
 
 export type Bed = {
   type: 'twin' | 'double' | 'queen' | 'king' | 'bunk' | 'sofa' | 'futon' | 'trundle' | 'murphy' | 'other';
@@ -130,7 +131,7 @@ export async function validateBaseInventoryChange(
        from future_dates where booked > $2
      )
      select * from override_conflicts union all select * from booking_conflicts order by stay_date limit 20`,
-    [roomId, nextInventory, ['pending', 'confirmed', 'checked_in', 'checked_out']],
+    [roomId, nextInventory, [...ACTIVE_INVENTORY_HOLD_STATUSES]],
   );
   if (conflicts.rowCount) {
     throw conflict(
