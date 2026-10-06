@@ -29,6 +29,34 @@ const toDate = (dateKey: string) => {
 const occupancyTone = (pct: number) =>
   pct >= 0.85 ? 'destructive' : pct >= 0.6 ? 'warning' : 'success';
 
+type CalendarApiError = Error & { details?: { currentDay?: AdminCalendarDay } };
+
+function currentDayFromError(error: unknown): AdminCalendarDay | null {
+  if (!(error instanceof Error)) return null;
+  return (error as CalendarApiError).details?.currentDay ?? null;
+}
+
+function replaceCalendarDay(
+  calendar: AdminCalendarResponse,
+  roomId: string,
+  saved: AdminCalendarDay,
+): AdminCalendarResponse {
+  const previous = calendar.rooms.find(room => room.roomType.id === roomId)?.days.find(day => day.date === saved.date);
+  const inventoryDelta = saved.inventory - (previous?.inventory ?? saved.inventory);
+  return {
+    ...calendar,
+    rooms: calendar.rooms.map(room => room.roomType.id !== roomId ? room : {
+      ...room,
+      days: room.days.map(day => day.date === saved.date ? saved : day),
+    }),
+    occupancy: calendar.occupancy.map(day => {
+      if (day.date !== saved.date) return day;
+      const total = Math.max(0, day.total + inventoryDelta);
+      return { ...day, total, pct: total ? day.booked / total : 0 };
+    }),
+  };
+}
+
 export default function AdminCalendarPage() {
   const { user } = useAdminSession();
   const today = startOfToday();
@@ -39,7 +67,7 @@ export default function AdminCalendarPage() {
   const [calendar, setCalendar] = useState<AdminCalendarResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [savingStatus, setSavingStatus] = useState<string | null>(null);
+  const [savingStatuses, setSavingStatuses] = useState<Set<string>>(() => new Set());
   const canManageAvailability = hasAdminPermission(user, ADMIN_PERMISSIONS.availabilityManage);
   const canManageRates = hasAdminPermission(user, ADMIN_PERMISSIONS.ratesManage);
 
@@ -85,58 +113,52 @@ export default function AdminCalendarPage() {
   };
 
   const handleStatusChange = async (roomId: string, day: AdminCalendarDay) => {
-    if (!calendar || !canManageAvailability || day.availabilityState === 'sold_out') return;
+    if (!calendar || !canManageAvailability) return;
     const key = `${roomId}|${day.date}`;
+    if (savingStatuses.has(key)) return;
     const nextStatus = day.status === 'open' ? 'closed' : 'open';
-    const previous = calendar;
-    setSavingStatus(key);
-    setCalendar(current => current ? {
-      ...current,
-      rooms: current.rooms.map(room => room.roomType.id !== roomId ? room : {
-        ...room,
-        days: room.days.map(item => item.date !== day.date ? item : {
-          ...item,
-          status: nextStatus,
-          sellableRemaining: nextStatus === 'closed' ? 0 : item.remaining,
-          availabilityState: nextStatus === 'closed' ? 'closed' : item.remaining === 0 ? 'sold_out' : 'open',
-        }),
-      }),
-    } : current);
+    const previousState = day.availabilityState;
+    const optimisticDay: AdminCalendarDay = {
+      ...day,
+      status: nextStatus,
+      sellableRemaining: nextStatus === 'closed' ? 0 : day.remaining,
+      availabilityState: nextStatus === 'closed' ? 'closed' : day.remaining === 0 ? 'sold_out' : 'open',
+    };
+    setSavingStatuses(current => new Set(current).add(key));
+    setCalendar(current => current ? replaceCalendarDay(current, roomId, optimisticDay) : current);
     try {
-      const saved = await setInventoryStatus({ roomId, date: day.date, status: nextStatus, expectedUpdatedAt: day.updatedAt });
-      setCalendar(current => current ? {
-        ...current,
-        rooms: current.rooms.map(room => room.roomType.id !== roomId ? room : {
-          ...room,
-          days: room.days.map(item => item.date === day.date ? saved : item),
-        }),
-      } : current);
-      toast.success(nextStatus === 'closed' ? 'Date closed for sale.' : saved.availabilityState === 'sold_out' ? 'Date reopened, but remains sold out.' : 'Date opened for sale.');
+      const saved = await setInventoryStatus({
+        roomId,
+        date: day.date,
+        status: nextStatus,
+        expectedStatus: day.status,
+        expectedUpdatedAt: day.updatedAt,
+      });
+      setCalendar(current => current ? replaceCalendarDay(current, roomId, saved) : current);
+      toast.success(
+        nextStatus === 'open'
+          ? 'Room opened for sale.'
+          : previousState === 'sold_out'
+            ? 'Sold-out date closed for sale.'
+            : 'Room closed for sale.',
+      );
     } catch (err) {
-      setCalendar(previous);
+      const currentDay = currentDayFromError(err);
+      setCalendar(current => current ? replaceCalendarDay(current, roomId, currentDay ?? day) : current);
       toast.error(err instanceof Error ? err.message : 'Unable to update availability.');
     } finally {
-      setSavingStatus(null);
+      setSavingStatuses(current => {
+        const next = new Set(current);
+        next.delete(key);
+        return next;
+      });
     }
   };
 
   const handleDaySaved = (roomId: string, saved: AdminCalendarDay) => {
     setCalendar(current => {
       if (!current) return current;
-      const previous = current.rooms.find(room => room.roomType.id === roomId)?.days.find(day => day.date === saved.date);
-      const inventoryDelta = saved.inventory - (previous?.inventory ?? saved.inventory);
-      return {
-        ...current,
-        rooms: current.rooms.map(room => room.roomType.id !== roomId ? room : {
-          ...room,
-          days: room.days.map(day => day.date === saved.date ? saved : day),
-        }),
-        occupancy: current.occupancy.map(day => {
-          if (day.date !== saved.date) return day;
-          const total = Math.max(0, day.total + inventoryDelta);
-          return { ...day, total, pct: total ? day.booked / total : 0 };
-        }),
-      };
+      return replaceCalendarDay(current, roomId, saved);
     });
   };
 
@@ -251,7 +273,7 @@ export default function AdminCalendarPage() {
                   onSaved={loadCalendar}
                   canManageAvailability={canManageAvailability}
                   canManageRates={canManageRates}
-                  savingStatus={savingStatus}
+                  savingStatuses={savingStatuses}
                   onStatusChange={day => void handleStatusChange(room.roomType.id, day)}
                   onDaySaved={saved => handleDaySaved(room.roomType.id, saved)}
                 />
@@ -287,7 +309,7 @@ function CalendarRoomRows({
   onSaved,
   canManageAvailability,
   canManageRates,
-  savingStatus,
+  savingStatuses,
   onStatusChange,
   onDaySaved,
 }: {
@@ -299,7 +321,7 @@ function CalendarRoomRows({
   onSaved: () => Promise<void>;
   canManageAvailability: boolean;
   canManageRates: boolean;
-  savingStatus: string | null;
+  savingStatuses: Set<string>;
   onStatusChange: (day: AdminCalendarDay) => void;
   onDaySaved: (day: AdminCalendarDay) => void;
 }) {
@@ -312,7 +334,7 @@ function CalendarRoomRows({
           <span className="text-sm font-medium truncate">{room.roomType.name}</span>
         </button>
         {room.days.map(day => (
-          <AvailabilityCell key={day.date} day={day} disabled={!canManageAvailability || isBefore(toDate(day.date), today)} saving={savingStatus === `${room.roomType.id}|${day.date}`} onClick={() => onStatusChange(day)} />
+          <AvailabilityCell key={day.date} day={day} disabled={!canManageAvailability || isBefore(toDate(day.date), today)} saving={savingStatuses.has(`${room.roomType.id}|${day.date}`)} onClick={() => onStatusChange(day)} />
         ))}
       </div>
 
@@ -360,17 +382,17 @@ function CalendarRoomRows({
   );
 }
 
-function AvailabilityCell({ day, disabled, saving, onClick }: { day: AdminCalendarDay; disabled: boolean; saving: boolean; onClick: () => void }) {
+export function AvailabilityCell({ day, disabled, saving, onClick }: { day: AdminCalendarDay; disabled: boolean; saving: boolean; onClick: () => void }) {
   const soldOut = day.availabilityState === 'sold_out';
   const closed = day.availabilityState === 'closed';
   return (
-    <button type="button" disabled={disabled || saving || soldOut} onClick={onClick} className={cn(
+    <button type="button" disabled={disabled || saving} onClick={onClick} className={cn(
       'm-1.5 min-h-9 rounded-md border flex items-center justify-center gap-1 text-[10px] font-semibold transition-colors',
       day.availabilityState === 'open' && 'border-success/40 bg-success/15 text-success hover:bg-success/25',
       closed && 'border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/20',
-      soldOut && 'border-warning/50 bg-warning/15 text-warning cursor-default',
+      soldOut && 'border-warning/50 bg-warning/15 text-warning hover:bg-warning/25',
       disabled && 'opacity-55 cursor-not-allowed',
-    )} title={soldOut ? 'Sold out. Increase inventory to make this date sellable.' : closed ? 'Click to reopen' : 'Click to close'}>
+    )} title={soldOut ? 'Sold out. Click to close this date for sale.' : closed ? 'Click to reopen' : 'Click to close'}>
       {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : soldOut ? <AlertTriangle className="h-3.5 w-3.5" /> : closed ? <X className="h-3.5 w-3.5" /> : <Check className="h-3.5 w-3.5" />}
       {soldOut ? 'Sold out' : closed ? 'Closed' : 'Open'}
     </button>
@@ -459,7 +481,7 @@ function InventoryCell({ room, day, disabled, onSaved }: {
   useEffect(() => { if (editing) inputRef.current?.select(); }, [editing]);
 
   const commit = async () => {
-    const validationError = inventoryValidationMessage(val, day.booked, room.roomType.inventoryCount);
+    const validationError = inventoryValidationMessage(val, day.booked);
     if (validationError) {
       toast.error(validationError);
       setVal(String(day.inventory));
@@ -475,14 +497,21 @@ function InventoryCell({ room, day, disabled, onSaved }: {
         roomId: room.roomType.id,
         date: day.date,
         inventory,
+        expectedInventory: day.inventory,
         expectedUpdatedAt: day.updatedAt,
       });
       setVal(String(saved.inventory));
       onSaved(saved);
-      toast.success(`Inventory updated to ${saved.inventory} for ${room.roomType.name}.`);
+      toast.success('Inventory updated.');
     } catch (error) {
+      const currentDay = currentDayFromError(error);
+      if (currentDay) {
+        setVal(String(currentDay.inventory));
+        onSaved(currentDay);
+      } else {
+        setVal(String(day.inventory));
+      }
       toast.error(error instanceof Error ? error.message : 'Unable to update inventory.');
-      setVal(String(day.inventory));
     } finally {
       setSaving(false);
     }
@@ -495,7 +524,7 @@ function InventoryCell({ room, day, disabled, onSaved }: {
           ref={inputRef}
           type="number"
           min={day.booked}
-          max={room.roomType.inventoryCount}
+          max={999}
           step={1}
           inputMode="numeric"
           value={val}
@@ -535,7 +564,7 @@ function InventoryCell({ room, day, disabled, onSaved }: {
         'p-2 text-center border-l text-xs font-medium w-full transition-colors',
         disabled ? 'text-muted-foreground/50 cursor-not-allowed' : 'hover:bg-muted/50 cursor-text',
       )}
-      title={disabled ? 'Past date or insufficient permission' : `Click to edit inventory (${day.booked} to ${room.roomType.inventoryCount})`}
+      title={disabled ? 'Past date or insufficient permission' : `Click to edit inventory (${day.booked} to 999)`}
     >
       {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin mx-auto" /> : day.inventory}
     </button>

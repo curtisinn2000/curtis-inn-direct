@@ -138,6 +138,7 @@ export const inventoryStatusWriteSchema = z.object({
   roomId: z.string().uuid(),
   date: isoDateSchema,
   status: z.enum(['open', 'closed']),
+  expectedStatus: z.enum(['open', 'closed']).optional(),
   expectedUpdatedAt: z.string().datetime().nullable().optional(),
 });
 
@@ -145,6 +146,7 @@ export const inventoryWriteSchema = z.object({
   roomId: z.string().uuid(),
   date: isoDateSchema,
   inventory: z.coerce.number().int().min(0).max(999),
+  expectedInventory: z.coerce.number().int().min(0).max(999).optional(),
   expectedUpdatedAt: z.string().datetime().nullable().optional(),
 });
 

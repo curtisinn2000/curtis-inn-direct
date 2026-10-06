@@ -69,17 +69,16 @@ export function BulkUpdateDialog({ open, onOpenChange, rooms, onSubmit }: Props)
     : [];
   const daysCount = selectedDates.length;
 
-  const inventoryError = (roomId: string, value: string): string | null => {
+  const inventoryError = (value: string): string | null => {
     if (value === '') return null;
     const n = Number(value);
-    if (!Number.isFinite(n) || n < 0) return 'Must be 0 or more';
-    const base = rooms.find(room => room.id === roomId)?.inventoryCount ?? 0;
-    if (n > base) return `Max ${base} (set in Room Types)`;
+    if (!Number.isInteger(n) || n < 0) return 'Must be a whole number from 0 to 999';
+    if (n > 999) return 'Maximum inventory is 999';
     return null;
   };
 
   const activeUpdates = Object.entries(updates).filter(([_, u]) => u.inventory !== '' || u.mode !== 'no_change');
-  const hasInventoryErrors = Object.entries(updates).some(([id, u]) => !!inventoryError(id, u.inventory));
+  const hasInventoryErrors = Object.values(updates).some(u => !!inventoryError(u.inventory));
   const canNextDates = !!(range?.from && range?.to && daysCount > 0);
   const canPreview = activeUpdates.length > 0 && !hasInventoryErrors;
 
@@ -222,11 +221,11 @@ export function BulkUpdateDialog({ open, onOpenChange, rooms, onSubmit }: Props)
             <Card className="p-4 space-y-4">
               <div>
                 <h3 className="font-semibold text-sm">Select Updates</h3>
-                <p className="text-xs text-muted-foreground mt-0.5">No changes are made to fields left blank. Inventory is capped by the value set on the Rooms page.</p>
+                <p className="text-xs text-muted-foreground mt-0.5">No changes are made to fields left blank. Inventory can be set from 0 to 999.</p>
               </div>
               <div className="space-y-4 max-h-80 overflow-y-auto pr-2">
                 {rooms.map(r => {
-                  const err = inventoryError(r.id, updates[r.id].inventory);
+                  const err = inventoryError(updates[r.id].inventory);
                   return (
                     <div key={r.id} className="space-y-2">
                       <div className="flex items-baseline justify-between">
@@ -235,9 +234,9 @@ export function BulkUpdateDialog({ open, onOpenChange, rooms, onSubmit }: Props)
                       </div>
                       <div className="grid grid-cols-[1fr_1fr] gap-3">
                         <div>
-                          <Label className="text-xs text-muted-foreground">Inventory (max {r.inventoryCount})</Label>
+                          <Label className="text-xs text-muted-foreground">Inventory (max 999)</Label>
                           <Input
-                            type="number" min={0} max={r.inventoryCount} placeholder=""
+                            type="number" min={0} max={999} step={1} placeholder=""
                             value={updates[r.id].inventory}
                             onChange={(e) => setUpdates(p => ({ ...p, [r.id]: { ...p[r.id], inventory: e.target.value }}))}
                             className={cn(err && 'border-destructive focus-visible:ring-destructive')}

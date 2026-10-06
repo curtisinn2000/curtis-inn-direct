@@ -495,17 +495,13 @@ adminRouter.patch('/inventory/status', asyncHandler(async (req, res) => {
 adminRouter.post('/inventory/bulk', asyncHandler(async (req, res) => {
   const input = bulkInventorySchema.parse(req.body);
   await withTransaction(async client => {
-    const room = await client.query(`select base_inventory from room_types where id = $1 and deleted_at is null`, [input.roomId]);
+    const room = await client.query(`select id from room_types where id = $1 and is_active = true and deleted_at is null`, [input.roomId]);
     if (!room.rowCount) throw notFound('room_not_found', 'Room type was not found.');
-    if (input.patch.inventory != null && input.patch.inventory > Number(room.rows[0].base_inventory)) {
-      throw badRequest('inventory_exceeded', 'Inventory cannot exceed the room type base inventory.', {
-        maxInventory: Number(room.rows[0].base_inventory),
-      });
-    }
     for (const date of input.dates) {
       const booked = await getBookedCount(client, input.roomId, date);
       if (input.patch.inventory != null && input.patch.inventory < booked) {
-        throw badRequest('inventory_below_booked', `Inventory cannot be lower than ${booked} booked room(s) on ${date}.`, {
+        const rooms = `${booked} room${booked === 1 ? '' : 's'} already booked`;
+        throw badRequest('inventory_below_booked', `Inventory cannot be lower than ${rooms} on ${date}.`, {
           date,
           booked,
           requestedInventory: input.patch.inventory,

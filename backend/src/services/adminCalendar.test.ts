@@ -1,5 +1,16 @@
-import { describe, expect, it } from 'vitest';
-import { calendarDayFromRow, validateDailyInventory } from './adminCalendar.js';
+import { describe, expect, it, vi } from 'vitest';
+import type { DbClient } from '../db.js';
+import { calendarDayFromRow, hasFieldConflict, setDailyInventory, setInventoryStatus, validateDailyInventory } from './adminCalendar.js';
+
+const canonicalRow = (overrides: Record<string, unknown> = {}) => ({
+  stay_date: '2099-10-10',
+  inventory: 5,
+  booked: 2,
+  status: 'open',
+  rate: 109,
+  updated_at: '2099-01-01T00:00:00.000Z',
+  ...overrides,
+});
 
 describe('availability state derivation', () => {
   const row = { stay_date: '2026-10-05', rate: 109, updated_at: null };
@@ -18,15 +29,130 @@ describe('availability state derivation', () => {
 });
 
 describe('daily inventory validation', () => {
-  it('accepts inventory between booked rooms and physical inventory', () => {
-    expect(() => validateDailyInventory(3, 2, 4)).not.toThrow();
+  it('accepts inventory at or above booked rooms, including above base inventory', () => {
+    expect(() => validateDailyInventory(3, 2)).not.toThrow();
+    expect(() => validateDailyInventory(5, 2)).not.toThrow();
   });
 
   it('rejects inventory below booked rooms', () => {
-    expect(() => validateDailyInventory(1, 2, 4)).toThrow(/lower than 2 booked room/);
+    expect(() => validateDailyInventory(1, 2)).toThrow(/lower than 2 rooms already booked/);
   });
 
-  it('rejects inventory above physical inventory', () => {
-    expect(() => validateDailyInventory(5, 2, 4)).toThrow(/cannot exceed.*4/i);
+  it('rejects values outside the database range', () => {
+    expect(() => validateDailyInventory(-1, 0)).toThrow(/0 to 999/);
+    expect(() => validateDailyInventory(1000, 0)).toThrow(/0 to 999/);
+  });
+});
+
+describe('field-specific optimistic concurrency', () => {
+  it('does not conflict when the edited field is unchanged', () => {
+    expect(hasFieldConflict('open', 'open', 'closed')).toBe(false);
+    expect(hasFieldConflict(3, 3, 5)).toBe(false);
+  });
+
+  it('conflicts when the same field changed concurrently', () => {
+    expect(hasFieldConflict('open', 'closed', 'open')).toBe(true);
+    expect(hasFieldConflict(3, 4, 5)).toBe(true);
+  });
+
+  it('treats an already-persisted request as idempotent success', () => {
+    expect(hasFieldConflict('open', 'closed', 'closed')).toBe(false);
+    expect(hasFieldConflict(3, 5, 5)).toBe(false);
+  });
+});
+
+describe('authoritative availability writes', () => {
+  it('updates only status and returns the canonical recalculated day', async () => {
+    const query = vi.fn(async (sql: string, _params?: unknown[]) => {
+      if (sql.includes('select id from room_types')) return { rowCount: 1, rows: [{ id: 'room-1' }] };
+      if (sql.includes('select status, updated_at')) return { rowCount: 1, rows: [{ status: 'open' }] };
+      if (sql.includes('with requested_dates')) return { rowCount: 1, rows: [canonicalRow({ status: 'closed' })] };
+      return { rowCount: 1, rows: [] };
+    });
+
+    const day = await setInventoryStatus({ query } as unknown as DbClient, {
+      roomId: '00000000-0000-4000-8000-000000000001',
+      date: '2099-10-10',
+      status: 'closed',
+      expectedStatus: 'open',
+      actorId: '00000000-0000-4000-8000-000000000002',
+      taxRate: 0.13,
+    });
+
+    expect(day).toMatchObject({ status: 'closed', inventory: 5, remaining: 3, availabilityState: 'closed' });
+    const upsert = query.mock.calls.find(([sql]) => String(sql).includes('insert into inventory_overrides'));
+    expect(String(upsert?.[0])).not.toContain('inventory, status');
+    expect(upsert?.[1]).toEqual([
+      '00000000-0000-4000-8000-000000000001', '2099-10-10', 'closed',
+      '00000000-0000-4000-8000-000000000002',
+    ]);
+  });
+
+  it('updates only inventory, permits values above base, and preserves closed status', async () => {
+    const query = vi.fn(async (sql: string, _params?: unknown[]) => {
+      if (sql.includes('select id, base_inventory')) return { rowCount: 1, rows: [{ id: 'room-1', base_inventory: 3 }] };
+      if (sql.includes('select inventory, status')) return { rowCount: 1, rows: [{ inventory: 3, status: 'closed' }] };
+      if (sql.includes('with requested_dates')) return { rowCount: 1, rows: [canonicalRow({ status: 'closed' })] };
+      if (sql.includes('coalesce(sum(rn.rooms)')) return { rowCount: 1, rows: [{ booked: 2 }] };
+      return { rowCount: 1, rows: [] };
+    });
+
+    const day = await setDailyInventory({ query } as unknown as DbClient, {
+      roomId: '00000000-0000-4000-8000-000000000001',
+      date: '2099-10-10',
+      inventory: 5,
+      expectedInventory: 3,
+      actorId: '00000000-0000-4000-8000-000000000002',
+      taxRate: 0.13,
+    });
+
+    expect(day).toMatchObject({ inventory: 5, status: 'closed', remaining: 3, availabilityState: 'closed' });
+    const upsert = query.mock.calls.find(([sql]) => String(sql).includes('insert into inventory_overrides'));
+    expect(String(upsert?.[0])).not.toContain('inventory, status');
+  });
+
+  it('returns the canonical day with a same-field status conflict', async () => {
+    const query = vi.fn(async (sql: string, _params?: unknown[]) => {
+      if (sql.includes('select id from room_types')) return { rowCount: 1, rows: [{ id: 'room-1' }] };
+      if (sql.includes('select status, updated_at')) return { rowCount: 1, rows: [{ status: 'closed' }] };
+      if (sql.includes('with requested_dates')) return { rowCount: 1, rows: [canonicalRow({ status: 'closed' })] };
+      return { rowCount: 1, rows: [] };
+    });
+
+    await expect(setInventoryStatus({ query } as unknown as DbClient, {
+      roomId: '00000000-0000-4000-8000-000000000001',
+      date: '2099-10-10',
+      status: 'open',
+      expectedStatus: 'open',
+      actorId: '00000000-0000-4000-8000-000000000002',
+      taxRate: 0.13,
+    })).rejects.toMatchObject({
+      status: 409,
+      code: 'availability_status_stale',
+      details: { currentDay: expect.objectContaining({ status: 'closed', inventory: 5 }) },
+    });
+  });
+
+  it('returns the canonical day with a same-field inventory conflict', async () => {
+    const query = vi.fn(async (sql: string, _params?: unknown[]) => {
+      if (sql.includes('select id, base_inventory')) return { rowCount: 1, rows: [{ id: 'room-1', base_inventory: 3 }] };
+      if (sql.includes('select inventory, status')) return { rowCount: 1, rows: [{ inventory: 4, status: 'open' }] };
+      if (sql.includes('with requested_dates')) return { rowCount: 1, rows: [canonicalRow({ inventory: 4 })] };
+      if (sql.includes('coalesce(sum(rn.rooms)')) return { rowCount: 1, rows: [{ booked: 2 }] };
+      return { rowCount: 1, rows: [] };
+    });
+
+    await expect(setDailyInventory({ query } as unknown as DbClient, {
+      roomId: '00000000-0000-4000-8000-000000000001',
+      date: '2099-10-10',
+      inventory: 5,
+      expectedInventory: 3,
+      actorId: '00000000-0000-4000-8000-000000000002',
+      taxRate: 0.13,
+    })).rejects.toMatchObject({
+      status: 409,
+      code: 'inventory_stale',
+      details: { currentDay: expect.objectContaining({ status: 'open', inventory: 4 }) },
+    });
   });
 });

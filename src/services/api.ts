@@ -257,6 +257,7 @@ export async function setDailyInventory(input: {
   roomId: string;
   date: string;
   inventory: number;
+  expectedInventory?: number;
   expectedUpdatedAt?: string | null;
 }): Promise<AdminCalendarDay> {
   return apiRequest<AdminCalendarDay>('/admin/inventory', { method: 'PATCH', body: JSON.stringify(input) });
@@ -274,6 +275,7 @@ export async function setInventoryStatus(input: {
   roomId: string;
   date: string;
   status: InventoryStatus;
+  expectedStatus?: InventoryStatus;
   expectedUpdatedAt?: string | null;
 }): Promise<AdminCalendarDay> {
   return apiRequest<AdminCalendarDay>('/admin/inventory/status', { method: 'PATCH', body: JSON.stringify(input) });
