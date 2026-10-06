@@ -481,7 +481,12 @@ function InventoryCell({ room, day, disabled, onSaved }: {
   useEffect(() => { if (editing) inputRef.current?.select(); }, [editing]);
 
   const commit = async () => {
-    const validationError = inventoryValidationMessage(val, day.booked);
+    const validationError = inventoryValidationMessage(
+      val,
+      day.booked,
+      room.roomType.inventoryCount,
+      room.roomType.name,
+    );
     if (validationError) {
       toast.error(validationError);
       setVal(String(day.inventory));
@@ -524,7 +529,7 @@ function InventoryCell({ room, day, disabled, onSaved }: {
           ref={inputRef}
           type="number"
           min={day.booked}
-          max={999}
+          max={room.roomType.inventoryCount}
           step={1}
           inputMode="numeric"
           value={val}
@@ -564,7 +569,7 @@ function InventoryCell({ room, day, disabled, onSaved }: {
         'p-2 text-center border-l text-xs font-medium w-full transition-colors',
         disabled ? 'text-muted-foreground/50 cursor-not-allowed' : 'hover:bg-muted/50 cursor-text',
       )}
-      title={disabled ? 'Past date or insufficient permission' : `Click to edit inventory (${day.booked} to 999)`}
+      title={disabled ? 'Past date or insufficient permission' : `Click to edit inventory (${day.booked} to ${room.roomType.inventoryCount})`}
     >
       {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin mx-auto" /> : day.inventory}
     </button>

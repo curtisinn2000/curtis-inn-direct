@@ -8,6 +8,8 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "migrate": "tsx src/scripts/migrate.ts",
+    "migrate:prod": "node dist/scripts/migrate.js",
+    "audit:inventory-capacity": "node dist/scripts/auditInventoryCapacity.js",
     "seed:admin": "tsx src/scripts/createAdmin.ts",
     "test": "vitest run --config ./vitest.config.ts"
   },

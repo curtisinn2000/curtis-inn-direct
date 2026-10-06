@@ -120,7 +120,12 @@ export async function setInventoryStatus(db: DbClient, input: {
   return calendarDayFromRow(rows.rows[0]);
 }
 
-export function validateDailyInventory(inventory: number, booked: number) {
+export function validateDailyInventory(
+  inventory: number,
+  booked: number,
+  baseInventory: number,
+  roomName: string,
+) {
   if (!Number.isInteger(inventory) || inventory < 0 || inventory > 999) {
     throw badRequest('inventory_invalid', 'Inventory must be a whole number from 0 to 999.', {
       requestedInventory: inventory,
@@ -132,6 +137,13 @@ export function validateDailyInventory(inventory: number, booked: number) {
       booked,
       requestedInventory: inventory,
     });
+  }
+  if (inventory > baseInventory) {
+    throw badRequest(
+      'inventory_exceeded',
+      `Inventory cannot exceed the ${baseInventory} physical rooms configured for ${roomName}.`,
+      { roomName, baseInventory, requestedInventory: inventory },
+    );
   }
 }
 
@@ -150,7 +162,7 @@ export async function setDailyInventory(db: DbClient, input: {
 
   // Reservation creation takes a share lock on this row, so this update cannot race a new booking.
   const room = await db.query(
-    `select id, base_inventory from room_types
+    `select id, name, base_inventory from room_types
      where id = $1 and is_active = true and deleted_at is null
      for update`,
     [input.roomId],
@@ -171,8 +183,9 @@ export async function setDailyInventory(db: DbClient, input: {
   );
   const booked = Number(bookedResult.rows[0].booked);
   const baseInventory = Number(room.rows[0].base_inventory);
+  const roomName = String(room.rows[0].name);
   const previousInventory = existing.rows[0]?.inventory == null ? baseInventory : Number(existing.rows[0].inventory);
-  validateDailyInventory(input.inventory, booked);
+  validateDailyInventory(input.inventory, booked, baseInventory, roomName);
   if (input.inventory === previousInventory) {
     const rows = await calendarRows(db, [input.date], input.roomId, input.taxRate);
     return calendarDayFromRow(rows.rows[0]);

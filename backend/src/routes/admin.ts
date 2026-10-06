@@ -35,12 +35,12 @@ import {
 } from '../transformers.js';
 import { getBookedCount } from '../services/availability.js';
 import { slugify } from '../services/rooms.js';
-import { badRequest, notFound } from '../errors.js';
+import { AppError, badRequest, notFound } from '../errors.js';
 import { config } from '../config.js';
 import { addDaysKey, hotelTodayKey } from '../date-utils.js';
 import { getWebsiteContent } from '../services/content.js';
 import { uploadContentImage, validateContentImage } from '../services/uploads.js';
-import { getAdminCalendarData, setDailyInventory, setInventoryStatus } from '../services/adminCalendar.js';
+import { getAdminCalendarData, setDailyInventory, setInventoryStatus, validateDailyInventory } from '../services/adminCalendar.js';
 import { assertPublishableRoom, bedSummary, normalizeRoomWrite, publicRoomName, validateBaseInventoryChange } from '../services/roomTypes.js';
 
 export const adminRouter = Router();
@@ -362,7 +362,9 @@ adminRouter.put('/rooms/:id', requirePermission(permissions.roomsManage), asyncH
   const result = await withTransaction(async client => {
     const current = await client.query(`select * from room_types where id = $1 and deleted_at is null for update`, [roomId]);
     if (!current.rowCount) throw notFound('room_not_found', 'Room type was not found.');
-    if (input.baseInventory !== Number(current.rows[0].base_inventory)) await validateBaseInventoryChange(client, roomId, input.baseInventory);
+    if (input.baseInventory !== Number(current.rows[0].base_inventory)) {
+      await validateBaseInventoryChange(client, roomId, String(current.rows[0].name), input.baseInventory);
+    }
     const data = normalizeRoomWrite(input, current.rows[0]);
     const name = publicRoomName({
       customName: typeof data.customName === 'string' ? data.customName : null,
@@ -451,25 +453,23 @@ adminRouter.post('/rates/set', asyncHandler(async (req, res) => {
 
 adminRouter.post('/inventory/remaining', asyncHandler(async (req, res) => {
   const input = remainingWriteSchema.parse(req.body);
-  const room = await pool.query(`select base_inventory from room_types where id = $1 and deleted_at is null`, [input.roomId]);
-  if (!room.rowCount) throw notFound('room_not_found', 'Room type was not found.');
-  const booked = await getBookedCount(pool, input.roomId, input.date);
-  if (input.remaining + booked > Number(room.rows[0].base_inventory)) {
-    throw badRequest('inventory_exceeded', 'Remaining availability cannot exceed room inventory.', {
-      booked,
-      maxRemaining: Math.max(0, Number(room.rows[0].base_inventory) - booked),
+  const result = await withTransaction(async client => {
+    const room = await client.query(
+      `select id from room_types where id = $1 and is_active = true and deleted_at is null for update`,
+      [input.roomId],
+    );
+    if (!room.rowCount) throw notFound('room_not_found', 'Active room type was not found.');
+    const booked = await getBookedCount(client, input.roomId, input.date);
+    const day = await setDailyInventory(client, {
+      roomId: input.roomId,
+      date: input.date,
+      inventory: booked + input.remaining,
+      actorId: req.user!.id,
+      taxRate: config.TAX_RATE,
     });
-  }
-  const inventory = booked + input.remaining;
-  await pool.query(
-    `insert into inventory_overrides(room_type_id, stay_date, inventory, updated_by, updated_at)
-     values ($1, $2, $3, $4, now())
-     on conflict (room_type_id, stay_date)
-     do update set inventory = excluded.inventory, updated_by = excluded.updated_by, updated_at = now()`,
-    [input.roomId, input.date, inventory, req.user!.id],
-  );
-  await audit(pool, { actorId: req.user!.id, entity: 'inventory_override', entityId: `${input.roomId}|${input.date}`, action: 'set_remaining', after: { ...input, inventory, booked } });
-  res.json({ ok: true, inventory, booked });
+    return { day, booked };
+  });
+  res.json({ ok: true, inventory: result.day.inventory, booked: result.booked });
 }));
 
 adminRouter.patch('/inventory', asyncHandler(async (req, res) => {
@@ -495,17 +495,29 @@ adminRouter.patch('/inventory/status', asyncHandler(async (req, res) => {
 adminRouter.post('/inventory/bulk', asyncHandler(async (req, res) => {
   const input = bulkInventorySchema.parse(req.body);
   await withTransaction(async client => {
-    const room = await client.query(`select id from room_types where id = $1 and is_active = true and deleted_at is null`, [input.roomId]);
+    const room = await client.query(
+      `select id, name, base_inventory from room_types
+       where id = $1 and is_active = true and deleted_at is null for update`,
+      [input.roomId],
+    );
     if (!room.rowCount) throw notFound('room_not_found', 'Room type was not found.');
     for (const date of input.dates) {
       const booked = await getBookedCount(client, input.roomId, date);
-      if (input.patch.inventory != null && input.patch.inventory < booked) {
-        const rooms = `${booked} room${booked === 1 ? '' : 's'} already booked`;
-        throw badRequest('inventory_below_booked', `Inventory cannot be lower than ${rooms} on ${date}.`, {
-          date,
-          booked,
-          requestedInventory: input.patch.inventory,
-        });
+      if (input.patch.inventory != null) {
+        try {
+          validateDailyInventory(
+            input.patch.inventory,
+            booked,
+            Number(room.rows[0].base_inventory),
+            String(room.rows[0].name),
+          );
+        } catch (error) {
+          if (error instanceof AppError) {
+            const details = error.details && typeof error.details === 'object' ? error.details as Record<string, unknown> : {};
+            throw new AppError(error.status, error.code, `${error.message.replace(/\.$/, '')} on ${date}.`, { ...details, date });
+          }
+          throw error;
+        }
       }
       await client.query(
         `insert into inventory_overrides(room_type_id, stay_date, inventory, status, updated_by, updated_at)

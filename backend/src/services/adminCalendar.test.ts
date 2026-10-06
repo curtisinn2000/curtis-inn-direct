@@ -29,18 +29,19 @@ describe('availability state derivation', () => {
 });
 
 describe('daily inventory validation', () => {
-  it('accepts inventory at or above booked rooms, including above base inventory', () => {
-    expect(() => validateDailyInventory(3, 2)).not.toThrow();
-    expect(() => validateDailyInventory(5, 2)).not.toThrow();
+  it('accepts inventory at physical capacity and at booked quantity', () => {
+    expect(() => validateDailyInventory(4, 0, 4, 'King Room')).not.toThrow();
+    expect(() => validateDailyInventory(2, 2, 4, 'King Room')).not.toThrow();
   });
 
-  it('rejects inventory below booked rooms', () => {
-    expect(() => validateDailyInventory(1, 2)).toThrow(/lower than 2 rooms already booked/);
+  it('rejects inventory below booked rooms and above physical capacity', () => {
+    expect(() => validateDailyInventory(1, 2, 4, 'King Room')).toThrow(/lower than 2 rooms already booked/);
+    expect(() => validateDailyInventory(5, 0, 4, 'King Room')).toThrow(/cannot exceed the 4 physical rooms configured for King Room/);
   });
 
   it('rejects values outside the database range', () => {
-    expect(() => validateDailyInventory(-1, 0)).toThrow(/0 to 999/);
-    expect(() => validateDailyInventory(1000, 0)).toThrow(/0 to 999/);
+    expect(() => validateDailyInventory(-1, 0, 4, 'King Room')).toThrow(/0 to 999/);
+    expect(() => validateDailyInventory(1000, 0, 4, 'King Room')).toThrow(/0 to 999/);
   });
 });
 
@@ -88,9 +89,9 @@ describe('authoritative availability writes', () => {
     ]);
   });
 
-  it('updates only inventory, permits values above base, and preserves closed status', async () => {
+  it('updates only inventory up to physical capacity and preserves closed status', async () => {
     const query = vi.fn(async (sql: string, _params?: unknown[]) => {
-      if (sql.includes('select id, base_inventory')) return { rowCount: 1, rows: [{ id: 'room-1', base_inventory: 3 }] };
+      if (sql.includes('select id, name, base_inventory')) return { rowCount: 1, rows: [{ id: 'room-1', name: 'King Room', base_inventory: 5 }] };
       if (sql.includes('select inventory, status')) return { rowCount: 1, rows: [{ inventory: 3, status: 'closed' }] };
       if (sql.includes('with requested_dates')) return { rowCount: 1, rows: [canonicalRow({ status: 'closed' })] };
       if (sql.includes('coalesce(sum(rn.rooms)')) return { rowCount: 1, rows: [{ booked: 2 }] };
@@ -109,6 +110,29 @@ describe('authoritative availability writes', () => {
     expect(day).toMatchObject({ inventory: 5, status: 'closed', remaining: 3, availabilityState: 'closed' });
     const upsert = query.mock.calls.find(([sql]) => String(sql).includes('insert into inventory_overrides'));
     expect(String(upsert?.[0])).not.toContain('inventory, status');
+  });
+
+  it('rejects a direct inventory write above physical capacity without persisting it', async () => {
+    const query = vi.fn(async (sql: string, _params?: unknown[]) => {
+      if (sql.includes('select id, name, base_inventory')) return { rowCount: 1, rows: [{ id: 'room-1', name: 'King Room', base_inventory: 4 }] };
+      if (sql.includes('select inventory, status')) return { rowCount: 1, rows: [{ inventory: 4, status: 'open' }] };
+      if (sql.includes('coalesce(sum(rn.rooms)')) return { rowCount: 1, rows: [{ booked: 0 }] };
+      return { rowCount: 1, rows: [] };
+    });
+
+    await expect(setDailyInventory({ query } as unknown as DbClient, {
+      roomId: '00000000-0000-4000-8000-000000000001',
+      date: '2099-10-10',
+      inventory: 17,
+      expectedInventory: 4,
+      actorId: '00000000-0000-4000-8000-000000000002',
+      taxRate: 0.13,
+    })).rejects.toMatchObject({
+      status: 400,
+      code: 'inventory_exceeded',
+      message: 'Inventory cannot exceed the 4 physical rooms configured for King Room.',
+    });
+    expect(query.mock.calls.some(([sql]) => String(sql).includes('insert into inventory_overrides'))).toBe(false);
   });
 
   it('returns the canonical day with a same-field status conflict', async () => {
@@ -135,7 +159,7 @@ describe('authoritative availability writes', () => {
 
   it('returns the canonical day with a same-field inventory conflict', async () => {
     const query = vi.fn(async (sql: string, _params?: unknown[]) => {
-      if (sql.includes('select id, base_inventory')) return { rowCount: 1, rows: [{ id: 'room-1', base_inventory: 3 }] };
+      if (sql.includes('select id, name, base_inventory')) return { rowCount: 1, rows: [{ id: 'room-1', name: 'King Room', base_inventory: 5 }] };
       if (sql.includes('select inventory, status')) return { rowCount: 1, rows: [{ inventory: 4, status: 'open' }] };
       if (sql.includes('with requested_dates')) return { rowCount: 1, rows: [canonicalRow({ inventory: 4 })] };
       if (sql.includes('coalesce(sum(rn.rooms)')) return { rowCount: 1, rows: [{ booked: 2 }] };

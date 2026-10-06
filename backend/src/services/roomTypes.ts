@@ -103,7 +103,18 @@ export function assertPublishableRoom(input: {
   if (missing.length) throw badRequest('room_not_publishable', `Complete these fields before publishing: ${missing.join(', ')}.`, { missing });
 }
 
-export async function validateBaseInventoryChange(db: DbClient, roomId: string, nextInventory: number) {
+export function baseInventoryConflictMessage(roomName: string, nextInventory: number, rows: Record<string, unknown>[]) {
+  const dates = [...new Set(rows.map(row => String(row.stay_date)))].slice(0, 5);
+  const suffix = dates.length ? ` on ${dates.join(', ')}` : '';
+  return `Cannot reduce ${roomName} to ${nextInventory} physical rooms. Future bookings or inventory overrides exceed this capacity${suffix}.`;
+}
+
+export async function validateBaseInventoryChange(
+  db: DbClient,
+  roomId: string,
+  roomName: string,
+  nextInventory: number,
+) {
   const conflicts = await db.query(
     `with future_dates as (
        select stay_date, coalesce(sum(rn.rooms) filter (where r.status = any($3::reservation_status[])), 0)::int as booked
@@ -112,16 +123,20 @@ export async function validateBaseInventoryChange(db: DbClient, roomId: string, 
        where rn.room_type_id = $1 and rn.stay_date >= current_date
        group by stay_date
      ), override_conflicts as (
-       select stay_date, inventory, 0::int as booked, 'override'::text as reason
+       select stay_date::text, inventory, 0::int as booked, 'override'::text as reason
        from inventory_overrides where room_type_id = $1 and stay_date >= current_date and inventory > $2
      ), booking_conflicts as (
-       select stay_date, null::int as inventory, booked, 'booked'::text as reason
+       select stay_date::text, null::int as inventory, booked, 'booked'::text as reason
        from future_dates where booked > $2
      )
      select * from override_conflicts union all select * from booking_conflicts order by stay_date limit 20`,
-    [roomId, nextInventory, ['pending', 'confirmed', 'checked_in']],
+    [roomId, nextInventory, ['pending', 'confirmed', 'checked_in', 'checked_out']],
   );
   if (conflicts.rowCount) {
-    throw conflict('base_inventory_conflict', 'Base inventory cannot be lower than future inventory overrides or booked rooms.', { dates: conflicts.rows });
+    throw conflict(
+      'base_inventory_conflict',
+      baseInventoryConflictMessage(roomName, nextInventory, conflicts.rows),
+      { dates: conflicts.rows, roomName, requestedInventory: nextInventory },
+    );
   }
 }

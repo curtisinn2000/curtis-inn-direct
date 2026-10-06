@@ -13,6 +13,7 @@ import { Separator } from '@/components/ui/separator';
 import { Check, Pencil, AlertTriangle, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { dateKey } from '@/lib/bookingDates';
+import { bulkInventoryValidationMessage } from '@/lib/inventory';
 import { useToast } from '@/hooks/use-toast';
 import type { RoomType } from '@/types';
 
@@ -69,16 +70,14 @@ export function BulkUpdateDialog({ open, onOpenChange, rooms, onSubmit }: Props)
     : [];
   const daysCount = selectedDates.length;
 
-  const inventoryError = (value: string): string | null => {
-    if (value === '') return null;
-    const n = Number(value);
-    if (!Number.isInteger(n) || n < 0) return 'Must be a whole number from 0 to 999';
-    if (n > 999) return 'Maximum inventory is 999';
-    return null;
+  const inventoryError = (roomId: string, value: string): string | null => {
+    const room = rooms.find(item => item.id === roomId);
+    if (!room) return 'Room Type capacity is unavailable.';
+    return bulkInventoryValidationMessage(value, room.inventoryCount, room.name);
   };
 
   const activeUpdates = Object.entries(updates).filter(([_, u]) => u.inventory !== '' || u.mode !== 'no_change');
-  const hasInventoryErrors = Object.values(updates).some(u => !!inventoryError(u.inventory));
+  const hasInventoryErrors = Object.entries(updates).some(([roomId, update]) => !!inventoryError(roomId, update.inventory));
   const canNextDates = !!(range?.from && range?.to && daysCount > 0);
   const canPreview = activeUpdates.length > 0 && !hasInventoryErrors;
 
@@ -221,26 +220,27 @@ export function BulkUpdateDialog({ open, onOpenChange, rooms, onSubmit }: Props)
             <Card className="p-4 space-y-4">
               <div>
                 <h3 className="font-semibold text-sm">Select Updates</h3>
-                <p className="text-xs text-muted-foreground mt-0.5">No changes are made to fields left blank. Inventory can be set from 0 to 999.</p>
+                <p className="text-xs text-muted-foreground mt-0.5">No changes are made to fields left blank. Inventory cannot exceed each Room Type's physical room count.</p>
               </div>
               <div className="space-y-4 max-h-80 overflow-y-auto pr-2">
                 {rooms.map(r => {
-                  const err = inventoryError(updates[r.id].inventory);
+                  const err = inventoryError(r.id, updates[r.id].inventory);
                   return (
                     <div key={r.id} className="space-y-2">
                       <div className="flex items-baseline justify-between">
                         <p className="font-medium text-sm">{r.name}</p>
-                        <p className="text-[10px] text-muted-foreground">Base inventory: {r.inventoryCount}</p>
+                        <p className="text-[10px] text-muted-foreground">Physical rooms: {r.inventoryCount}</p>
                       </div>
                       <div className="grid grid-cols-[1fr_1fr] gap-3">
                         <div>
-                          <Label className="text-xs text-muted-foreground">Inventory (max 999)</Label>
+                          <Label className="text-xs text-muted-foreground">Inventory</Label>
                           <Input
-                            type="number" min={0} max={999} step={1} placeholder=""
+                            type="number" min={0} max={r.inventoryCount} step={1} placeholder=""
                             value={updates[r.id].inventory}
                             onChange={(e) => setUpdates(p => ({ ...p, [r.id]: { ...p[r.id], inventory: e.target.value }}))}
                             className={cn(err && 'border-destructive focus-visible:ring-destructive')}
                           />
+                          {!err && <p className="mt-1 text-[11px] text-muted-foreground">Maximum: {r.inventoryCount}</p>}
                           {err && <p className="text-[11px] text-destructive mt-1">{err}</p>}
                         </div>
                         <div>

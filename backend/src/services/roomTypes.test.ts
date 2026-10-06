@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { AppError } from '../errors.js';
-import { assertPublishableRoom, bedSummary, publicRoomName } from './roomTypes.js';
+import { assertPublishableRoom, baseInventoryConflictMessage, bedSummary, publicRoomName } from './roomTypes.js';
 
 describe('room type model', () => {
   it('creates a readable summary across bedrooms and bed types', () => {
@@ -19,5 +19,14 @@ describe('room type model', () => {
     const input = { shortDescription: '', longDescription: '', baseInventory: 0, images: [], bedrooms: [], basePrice: 0 };
     expect(() => assertPublishableRoom({ ...input, isActive: false })).not.toThrow();
     expect(() => assertPublishableRoom({ ...input, isActive: true })).toThrow(AppError);
+  });
+
+  it('identifies dates that block a physical room capacity reduction', () => {
+    expect(baseInventoryConflictMessage('King Room', 4, [
+      { stay_date: '2026-10-10', reason: 'override' },
+      { stay_date: '2026-10-11', reason: 'booked' },
+    ])).toBe(
+      'Cannot reduce King Room to 4 physical rooms. Future bookings or inventory overrides exceed this capacity on 2026-10-10, 2026-10-11.',
+    );
   });
 });
