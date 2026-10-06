@@ -18,6 +18,7 @@ import {
   roomOptionWriteSchema,
   roomWriteSchema,
   inventoryStatusWriteSchema,
+  inventoryWriteSchema,
   defaultRateWriteSchema,
   statusUpdateSchema,
 } from '../schemas.js';
@@ -39,7 +40,7 @@ import { config } from '../config.js';
 import { addDaysKey, hotelTodayKey } from '../date-utils.js';
 import { getWebsiteContent } from '../services/content.js';
 import { uploadContentImage, validateContentImage } from '../services/uploads.js';
-import { getAdminCalendarData, setInventoryStatus } from '../services/adminCalendar.js';
+import { getAdminCalendarData, setDailyInventory, setInventoryStatus } from '../services/adminCalendar.js';
 import { assertPublishableRoom, bedSummary, normalizeRoomWrite, publicRoomName, validateBaseInventoryChange } from '../services/roomTypes.js';
 
 export const adminRouter = Router();
@@ -469,6 +470,16 @@ adminRouter.post('/inventory/remaining', asyncHandler(async (req, res) => {
   );
   await audit(pool, { actorId: req.user!.id, entity: 'inventory_override', entityId: `${input.roomId}|${input.date}`, action: 'set_remaining', after: { ...input, inventory, booked } });
   res.json({ ok: true, inventory, booked });
+}));
+
+adminRouter.patch('/inventory', asyncHandler(async (req, res) => {
+  const input = inventoryWriteSchema.parse(req.body);
+  const day = await withTransaction(client => setDailyInventory(client, {
+    ...input,
+    actorId: req.user!.id,
+    taxRate: config.TAX_RATE,
+  }));
+  res.json(day);
 }));
 
 adminRouter.patch('/inventory/status', asyncHandler(async (req, res) => {

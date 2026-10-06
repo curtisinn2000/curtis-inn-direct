@@ -1,6 +1,7 @@
 import type { DbClient } from '../db.js';
-import { conflict, notFound } from '../errors.js';
+import { badRequest, conflict, notFound } from '../errors.js';
 import { audit, roomFromRow } from '../transformers.js';
+import { hotelTodayKey } from '../date-utils.js';
 
 const HOLD_STATUSES = ['pending', 'confirmed', 'checked_in'];
 
@@ -95,6 +96,84 @@ export async function setInventoryStatus(db: DbClient, input: {
     actorId: input.actorId, entity: 'inventory_override', entityId: `${input.roomId}|${input.date}`,
     action: 'status_update', before: { status: existing.rows[0]?.status ?? 'open' }, after: { status: input.status },
   });
+  const rows = await calendarRows(db, [input.date], input.roomId, input.taxRate);
+  return calendarDayFromRow(rows.rows[0]);
+}
+
+export function validateDailyInventory(inventory: number, booked: number, baseInventory: number) {
+  if (inventory > baseInventory) {
+    throw badRequest('inventory_exceeded', `Inventory cannot exceed the Room Type base inventory of ${baseInventory}.`, {
+      baseInventory,
+      requestedInventory: inventory,
+    });
+  }
+  if (inventory < booked) {
+    throw badRequest('inventory_below_booked', `Inventory cannot be lower than ${booked} booked room(s).`, {
+      booked,
+      requestedInventory: inventory,
+    });
+  }
+}
+
+export async function setDailyInventory(db: DbClient, input: {
+  roomId: string;
+  date: string;
+  inventory: number;
+  expectedUpdatedAt?: string | null;
+  actorId: string;
+  taxRate: number;
+}) {
+  if (input.date < hotelTodayKey()) {
+    throw badRequest('inventory_date_in_past', 'Inventory cannot be changed for a past date.');
+  }
+
+  // Reservation creation takes a share lock on this row, so this update cannot race a new booking.
+  const room = await db.query(
+    `select id, base_inventory from room_types
+     where id = $1 and is_active = true and deleted_at is null
+     for update`,
+    [input.roomId],
+  );
+  if (!room.rowCount) throw notFound('room_not_found', 'Active room type was not found.');
+
+  const existing = await db.query(
+    `select inventory, status, updated_at from inventory_overrides
+     where room_type_id = $1 and stay_date = $2 for update`,
+    [input.roomId, input.date],
+  );
+  const currentUpdatedAt = existing.rows[0]?.updated_at ? new Date(existing.rows[0].updated_at).toISOString() : null;
+  if (input.expectedUpdatedAt !== undefined && input.expectedUpdatedAt !== currentUpdatedAt) {
+    throw conflict('availability_stale', 'Availability changed since the calendar was loaded. Refresh and try again.', { currentUpdatedAt });
+  }
+
+  const bookedResult = await db.query(
+    `select coalesce(sum(rn.rooms) filter (where r.status = any($3::reservation_status[])), 0)::int as booked
+     from reservation_nights rn
+     join reservations r on r.id = rn.reservation_id
+     where rn.room_type_id = $1 and rn.stay_date = $2`,
+    [input.roomId, input.date, HOLD_STATUSES],
+  );
+  const booked = Number(bookedResult.rows[0].booked);
+  const baseInventory = Number(room.rows[0].base_inventory);
+  validateDailyInventory(input.inventory, booked, baseInventory);
+
+  const previousInventory = existing.rows[0]?.inventory == null ? baseInventory : Number(existing.rows[0].inventory);
+  await db.query(
+    `insert into inventory_overrides(room_type_id, stay_date, inventory, updated_by, updated_at)
+     values ($1, $2, $3, $4, now())
+     on conflict (room_type_id, stay_date)
+     do update set inventory = excluded.inventory, updated_by = excluded.updated_by, updated_at = now()`,
+    [input.roomId, input.date, input.inventory, input.actorId],
+  );
+  await audit(db, {
+    actorId: input.actorId,
+    entity: 'inventory_override',
+    entityId: `${input.roomId}|${input.date}`,
+    action: 'inventory_update',
+    before: { inventory: previousInventory, booked },
+    after: { inventory: input.inventory, booked },
+  });
+
   const rows = await calendarRows(db, [input.date], input.roomId, input.taxRate);
   return calendarDayFromRow(rows.rows[0]);
 }

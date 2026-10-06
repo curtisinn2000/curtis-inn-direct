@@ -253,6 +253,15 @@ export async function setRemainingAvailability(
   return apiRequest<{ ok: true; inventory: number; booked: number }>('/admin/inventory/remaining', jsonBody({ roomId, date, remaining }));
 }
 
+export async function setDailyInventory(input: {
+  roomId: string;
+  date: string;
+  inventory: number;
+  expectedUpdatedAt?: string | null;
+}): Promise<AdminCalendarDay> {
+  return apiRequest<AdminCalendarDay>('/admin/inventory', { method: 'PATCH', body: JSON.stringify(input) });
+}
+
 export async function bulkUpdateInventory(
   roomId: string,
   dates: string[],

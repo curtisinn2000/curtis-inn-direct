@@ -10,13 +10,14 @@ import { BulkUpdateDialog } from '@/components/admin/BulkUpdateDialog';
 import {
   bulkUpdateInventory,
   getAdminCalendar,
-  setRemainingAvailability,
+  setDailyInventory,
   setRoomRate,
   setInventoryStatus,
 } from '@/services/api';
 import type { AdminCalendarDay, AdminCalendarResponse, AdminCalendarRoom } from '@/types';
 import { useAdminSession, hasAdminPermission } from '@/contexts/AdminSessionContext';
 import { ADMIN_PERMISSIONS } from '@/config/adminPermissions';
+import { inventoryValidationMessage } from '@/lib/inventory';
 
 const DAY_WINDOW = 14;
 
@@ -39,7 +40,8 @@ export default function AdminCalendarPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [savingStatus, setSavingStatus] = useState<string | null>(null);
-  const canManage = hasAdminPermission(user, ADMIN_PERMISSIONS.availabilityManage);
+  const canManageAvailability = hasAdminPermission(user, ADMIN_PERMISSIONS.availabilityManage);
+  const canManageRates = hasAdminPermission(user, ADMIN_PERMISSIONS.ratesManage);
 
   const startKey = format(startDate, 'yyyy-MM-dd');
 
@@ -83,7 +85,7 @@ export default function AdminCalendarPage() {
   };
 
   const handleStatusChange = async (roomId: string, day: AdminCalendarDay) => {
-    if (!calendar || !canManage || day.availabilityState === 'sold_out') return;
+    if (!calendar || !canManageAvailability || day.availabilityState === 'sold_out') return;
     const key = `${roomId}|${day.date}`;
     const nextStatus = day.status === 'open' ? 'closed' : 'open';
     const previous = calendar;
@@ -118,6 +120,26 @@ export default function AdminCalendarPage() {
     }
   };
 
+  const handleDaySaved = (roomId: string, saved: AdminCalendarDay) => {
+    setCalendar(current => {
+      if (!current) return current;
+      const previous = current.rooms.find(room => room.roomType.id === roomId)?.days.find(day => day.date === saved.date);
+      const inventoryDelta = saved.inventory - (previous?.inventory ?? saved.inventory);
+      return {
+        ...current,
+        rooms: current.rooms.map(room => room.roomType.id !== roomId ? room : {
+          ...room,
+          days: room.days.map(day => day.date === saved.date ? saved : day),
+        }),
+        occupancy: current.occupancy.map(day => {
+          if (day.date !== saved.date) return day;
+          const total = Math.max(0, day.total + inventoryDelta);
+          return { ...day, total, pct: total ? day.booked / total : 0 };
+        }),
+      };
+    });
+  };
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
@@ -125,7 +147,7 @@ export default function AdminCalendarPage() {
           <h1 className="text-title">Availability Center</h1>
           <p className="text-sm text-muted-foreground">Manage occupancy, inventory, and rates across your rooms</p>
         </div>
-        {canManage && <Button onClick={() => setBulkOpen(true)} disabled={loading || !calendar}>Bulk Update</Button>}
+        {canManageAvailability && <Button onClick={() => setBulkOpen(true)} disabled={loading || !calendar}>Bulk Update</Button>}
       </div>
 
       <Card className="p-4 space-y-4">
@@ -227,9 +249,11 @@ export default function AdminCalendarPage() {
                   dateColTemplate={dateColTemplate}
                   today={today}
                   onSaved={loadCalendar}
-                  canManage={canManage}
+                  canManageAvailability={canManageAvailability}
+                  canManageRates={canManageRates}
                   savingStatus={savingStatus}
                   onStatusChange={day => void handleStatusChange(room.roomType.id, day)}
+                  onDaySaved={saved => handleDaySaved(room.roomType.id, saved)}
                 />
               ))}
             </div>
@@ -261,9 +285,11 @@ function CalendarRoomRows({
   dateColTemplate,
   today,
   onSaved,
-  canManage,
+  canManageAvailability,
+  canManageRates,
   savingStatus,
   onStatusChange,
+  onDaySaved,
 }: {
   room: AdminCalendarRoom;
   expanded: boolean;
@@ -271,9 +297,11 @@ function CalendarRoomRows({
   dateColTemplate: string;
   today: Date;
   onSaved: () => Promise<void>;
-  canManage: boolean;
+  canManageAvailability: boolean;
+  canManageRates: boolean;
   savingStatus: string | null;
   onStatusChange: (day: AdminCalendarDay) => void;
+  onDaySaved: (day: AdminCalendarDay) => void;
 }) {
   return (
     <div className="border-b last:border-b-0">
@@ -284,7 +312,7 @@ function CalendarRoomRows({
           <span className="text-sm font-medium truncate">{room.roomType.name}</span>
         </button>
         {room.days.map(day => (
-          <AvailabilityCell key={day.date} day={day} disabled={!canManage || isBefore(toDate(day.date), today)} saving={savingStatus === `${room.roomType.id}|${day.date}`} onClick={() => onStatusChange(day)} />
+          <AvailabilityCell key={day.date} day={day} disabled={!canManageAvailability || isBefore(toDate(day.date), today)} saving={savingStatus === `${room.roomType.id}|${day.date}`} onClick={() => onStatusChange(day)} />
         ))}
       </div>
 
@@ -292,7 +320,15 @@ function CalendarRoomRows({
         <>
           <div className="grid bg-card" style={{ gridTemplateColumns: dateColTemplate }}>
             <div className="p-2 pl-10 text-xs text-muted-foreground">Inventory</div>
-            {room.days.map(day => <div key={day.date} className="p-2 text-center border-l text-xs">{day.inventory}</div>)}
+            {room.days.map(day => (
+              <InventoryCell
+                key={day.date}
+                room={room}
+                day={day}
+                disabled={!canManageAvailability || isBefore(toDate(day.date), today)}
+                onSaved={onDaySaved}
+              />
+            ))}
           </div>
           <div className="grid bg-card border-t" style={{ gridTemplateColumns: dateColTemplate }}>
             <div className="p-2 pl-10 text-xs text-muted-foreground">Net rooms booked</div>
@@ -304,15 +340,7 @@ function CalendarRoomRows({
           </div>
           <div className="grid bg-card border-t" style={{ gridTemplateColumns: dateColTemplate }}>
             <div className="p-2 pl-10 text-xs text-muted-foreground">Remaining availability</div>
-            {room.days.map(day => (
-              <RemainingCell
-                key={day.date}
-                room={room}
-                day={day}
-                disabled={!canManage || isBefore(toDate(day.date), today)}
-                onSaved={onSaved}
-              />
-            ))}
+            {room.days.map(day => <div key={day.date} className="p-2 text-center border-l text-xs">{day.remaining}</div>)}
           </div>
           <div className="grid bg-card border-t" style={{ gridTemplateColumns: dateColTemplate }}>
             <div className="p-2 pl-10 text-xs text-muted-foreground">Rate (Room Only)</div>
@@ -321,7 +349,7 @@ function CalendarRoomRows({
                 key={day.date}
                 roomId={room.roomType.id}
                 day={day}
-                disabled={!canManage || isBefore(toDate(day.date), today)}
+                disabled={!canManageRates || isBefore(toDate(day.date), today)}
                 onSaved={onSaved}
               />
             ))}
@@ -415,59 +443,83 @@ function RateCell({ roomId, day, disabled, onSaved }: {
   );
 }
 
-function RemainingCell({ room, day, disabled, onSaved }: {
+function InventoryCell({ room, day, disabled, onSaved }: {
   room: AdminCalendarRoom;
   day: AdminCalendarDay;
   disabled?: boolean;
-  onSaved: () => Promise<void>;
+  onSaved: (day: AdminCalendarDay) => void;
 }) {
-  const max = Math.max(0, room.roomType.inventoryCount - day.booked);
-  const locked = disabled || day.status === 'closed';
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [val, setVal] = useState(String(day.remaining));
+  const [val, setVal] = useState(String(day.inventory));
   const inputRef = useRef<HTMLInputElement>(null);
+  const cancelBlurRef = useRef(false);
 
-  useEffect(() => { setVal(String(day.remaining)); }, [day.remaining]);
+  useEffect(() => { setVal(String(day.inventory)); }, [day.inventory]);
   useEffect(() => { if (editing) inputRef.current?.select(); }, [editing]);
 
   const commit = async () => {
-    const remaining = Math.max(0, Math.round(Number(val) || 0));
-    if (remaining > max) {
-      toast.error(`You cannot add more rooms than inventory (${room.roomType.inventoryCount} max for ${room.roomType.name}).`);
-      setVal(String(day.remaining));
+    const validationError = inventoryValidationMessage(val, day.booked, room.roomType.inventoryCount);
+    if (validationError) {
+      toast.error(validationError);
+      setVal(String(day.inventory));
       setEditing(false);
       return;
     }
+    const inventory = Number(val);
     setEditing(false);
-    if (remaining === day.remaining) return;
+    if (inventory === day.inventory) return;
     setSaving(true);
     try {
-      await setRemainingAvailability(room.roomType.id, day.date, remaining);
-      await onSaved();
+      const saved = await setDailyInventory({
+        roomId: room.roomType.id,
+        date: day.date,
+        inventory,
+        expectedUpdatedAt: day.updatedAt,
+      });
+      setVal(String(saved.inventory));
+      onSaved(saved);
+      toast.success(`Inventory updated to ${saved.inventory} for ${room.roomType.name}.`);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Unable to update remaining availability.');
-      setVal(String(day.remaining));
+      toast.error(error instanceof Error ? error.message : 'Unable to update inventory.');
+      setVal(String(day.inventory));
     } finally {
       setSaving(false);
     }
   };
 
-  if (editing && !locked) {
+  if (editing && !disabled) {
     return (
       <div className="p-1 text-center border-l">
         <input
           ref={inputRef}
           type="number"
-          min={0}
-          max={max}
+          min={day.booked}
+          max={room.roomType.inventoryCount}
+          step={1}
+          inputMode="numeric"
           value={val}
           onChange={e => setVal(e.target.value)}
-          onBlur={() => void commit()}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') void commit();
-            if (e.key === 'Escape') { setVal(String(day.remaining)); setEditing(false); }
+          onBlur={() => {
+            if (cancelBlurRef.current) {
+              cancelBlurRef.current = false;
+              return;
+            }
+            void commit();
           }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              e.currentTarget.blur();
+            }
+            if (e.key === 'Escape') {
+              e.preventDefault();
+              cancelBlurRef.current = true;
+              setVal(String(day.inventory));
+              setEditing(false);
+            }
+          }}
+          aria-label={`Inventory for ${room.roomType.name} on ${day.date}`}
           className="w-full h-7 text-xs text-center rounded border bg-background focus:outline-none focus:ring-1 focus:ring-primary"
         />
       </div>
@@ -477,15 +529,15 @@ function RemainingCell({ room, day, disabled, onSaved }: {
   return (
     <button
       type="button"
-      disabled={locked || saving}
+      disabled={disabled || saving}
       onClick={() => setEditing(true)}
       className={cn(
         'p-2 text-center border-l text-xs font-medium w-full transition-colors',
-        locked ? 'text-muted-foreground/50 cursor-not-allowed' : 'hover:bg-muted/50 cursor-text',
+        disabled ? 'text-muted-foreground/50 cursor-not-allowed' : 'hover:bg-muted/50 cursor-text',
       )}
-      title={day.status === 'closed' ? 'Closed. Reopen via Bulk Update' : disabled ? 'Past date' : `Click to edit (max ${max})`}
+      title={disabled ? 'Past date or insufficient permission' : `Click to edit inventory (${day.booked} to ${room.roomType.inventoryCount})`}
     >
-      {day.status === 'closed' ? '-' : saving ? '...' : day.remaining}
+      {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin mx-auto" /> : day.inventory}
     </button>
   );
 }

@@ -141,6 +141,13 @@ export const inventoryStatusWriteSchema = z.object({
   expectedUpdatedAt: z.string().datetime().nullable().optional(),
 });
 
+export const inventoryWriteSchema = z.object({
+  roomId: z.string().uuid(),
+  date: isoDateSchema,
+  inventory: z.coerce.number().int().min(0).max(999),
+  expectedUpdatedAt: z.string().datetime().nullable().optional(),
+});
+
 export const defaultRateWriteSchema = z.object({
   roomId: z.string().uuid(),
   rate: z.coerce.number().int().min(0).max(9999),
